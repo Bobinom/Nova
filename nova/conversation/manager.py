@@ -4,6 +4,7 @@ from typing import Any
 
 from nova.conversation.intent import Intent, classify
 from nova.conversation.repository import ConversationRepository
+from nova.llm.prompts import NOVA_SYSTEM_PROMPT
 from nova.llm.service import LLMService
 from nova.memory.engine import MemoryEngine
 
@@ -160,10 +161,23 @@ class ConversationManager:
             }
 
         if self.llm is not None:
+            turns = self.repository.recent(11)
+            if turns and turns[-1].role == "user" and turns[-1].text == text:
+                turns = turns[:-1]
+            turns = turns[-10:]
+
+            history = [
+                {"role": turn.role, "content": turn.text}
+                for turn in turns
+            ]
             return {
                 "handled": True,
                 "intent": "general",
-                "response": self.llm.generate(text),
+                "response": self.llm.generate(
+                    system_prompt=NOVA_SYSTEM_PROMPT,
+                    history=history,
+                    prompt=text,
+                ),
             }
 
         return {

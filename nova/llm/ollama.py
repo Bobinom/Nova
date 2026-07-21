@@ -21,18 +21,51 @@ class OllamaService(LLMService):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    def generate(self, prompt: str) -> str:
+    def generate(
+        self,
+        system_prompt: str,
+        history: list[dict[str, str]],
+        prompt: str,
+    ) -> str:
         prompt = prompt.strip()
 
         if not prompt:
             return "Please give me something to respond to."
 
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        normalized_history: list[dict[str, str]] = []
+        for turn in history:
+            content = turn.get("content", turn.get("text", ""))
+            if not isinstance(content, str) or not content.strip():
+                continue
+
+            role = turn.get("role", "user")
+            if role not in {"user", "assistant"}:
+                role = "user"
+
+            normalized_history.append(
+                {"role": role, "content": content.strip()},
+            )
+
+        if (
+            normalized_history
+            and normalized_history[-1]["role"] == "user"
+            and normalized_history[-1]["content"] == prompt
+        ):
+            normalized_history.pop()
+
+        messages.extend(normalized_history)
+        messages.append({"role": "user", "content": prompt})
+
         try:
             response = requests.post(
-                f"{self.base_url}/api/generate",
+                f"{self.base_url}/api/chat",
                 json={
                     "model": self.model,
-                    "prompt": prompt,
+                    "messages": messages,
                     "stream": False,
                 },
                 timeout=self.timeout,
@@ -53,7 +86,13 @@ class OllamaService(LLMService):
         except ValueError:
             return "Ollama returned an invalid response."
 
-        generated_text = data.get("response")
+        if not isinstance(data, dict):
+            return "Ollama returned an invalid response."
+
+        generated_text: Any = None
+        message = data.get("message")
+        if isinstance(message, dict):
+            generated_text = message.get("content")
 
         if not isinstance(generated_text, str) or not generated_text.strip():
             error = data.get("error")

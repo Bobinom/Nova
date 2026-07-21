@@ -10,8 +10,17 @@ from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 
 
+class RecordingLLM:
+    def __init__(self):
+        self.calls = []
+
+    def generate(self, system_prompt, history, prompt):
+        self.calls.append((system_prompt, history, prompt))
+        return "LLM response"
+
+
 class ConversationTests(unittest.TestCase):
-    def make_manager(self, database: Path):
+    def make_manager(self, database: Path, llm=None):
         events = EventBus(logging.getLogger("test.conversation"))
         memory = MemoryEngine(
             repository=MemoryRepository(database),
@@ -25,6 +34,7 @@ class ConversationTests(unittest.TestCase):
             memory=memory,
             events=events,
             logger=logging.getLogger("test.manager"),
+            llm=llm,
         )
         manager.initialize()
         return manager, memory
@@ -81,6 +91,33 @@ class ConversationTests(unittest.TestCase):
             self.assertEqual(history[1]["role"], "assistant")
             manager2.close()
             memory2.close()
+
+    def test_llm_receives_previous_turns_without_current_user_turn(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("First general question")
+            manager.handle("Follow-up general question")
+
+            _, history, prompt = llm.calls[-1]
+            self.assertEqual(
+                history,
+                [
+                    {"role": "user", "content": "First general question"},
+                    {"role": "assistant", "content": "LLM response"},
+                ],
+            )
+            self.assertEqual(prompt, "Follow-up general question")
+            self.assertNotIn(
+                {"role": "user", "content": "Follow-up general question"},
+                history,
+            )
+            manager.close()
+            memory.close()
 
 
 if __name__ == "__main__":
