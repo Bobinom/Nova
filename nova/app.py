@@ -10,6 +10,7 @@ from nova.core.logging import configure_logging
 from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
 from nova.core.state import StateStore
+from nova.llm.ollama import OllamaService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 from nova.plugins.manager import PluginManager
@@ -39,23 +40,35 @@ class NovaApplication:
         self.logger = configure_logging(self.paths.logs_dir)
         self.settings = SettingsManager(self.paths.settings_file)
         self.state = StateStore(self.paths.database_file)
-        self.events = EventBus(logger=self.logger)
+
+        self.events = EventBus(
+            logger=self.logger,
+        )
+
         self.plugins = PluginManager(
             plugins_dir=self.paths.plugins_dir,
             event_bus=self.events,
             logger=self.logger,
         )
+
         self.memory = MemoryEngine(
             repository=MemoryRepository(self.paths.database_file),
             events=self.events,
             logger=self.logger.getChild("memory"),
         )
+
+        self.llm = OllamaService(
+            model="llama3.2",
+        )
+
         self.conversation = ConversationManager(
             repository=ConversationRepository(self.paths.database_file),
             memory=self.memory,
             events=self.events,
             logger=self.logger.getChild("conversation"),
+            llm=self.llm,
         )
+
         self._running = False
 
     def start(self) -> None:
@@ -63,6 +76,7 @@ class NovaApplication:
             return
 
         self.logger.info("Starting Nova Core")
+
         self.settings.load()
         self.state.initialize()
         self.memory.initialize()
@@ -71,7 +85,14 @@ class NovaApplication:
         self.plugins.start_all()
 
         self._running = True
-        self.events.emit("nova.started", {"version": "4.2.1"})
+
+        self.events.emit(
+            "nova.started",
+            {
+                "version": "4.2.1",
+            },
+        )
+
         self.logger.info("Nova Core started")
 
     def stop(self) -> None:
@@ -79,12 +100,19 @@ class NovaApplication:
             return
 
         self.logger.info("Stopping Nova Core")
-        self.events.emit("nova.stopping", {})
+
+        self.events.emit(
+            "nova.stopping",
+            {},
+        )
+
         self.plugins.stop_all()
         self.conversation.close()
         self.memory.close()
         self.state.close()
+
         self._running = False
+
         self.logger.info("Nova Core stopped")
 
     def status(self) -> dict[str, Any]:
