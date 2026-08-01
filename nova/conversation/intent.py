@@ -23,6 +23,25 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
     raw = text.strip()
     normalized = _normalize(raw)
 
+    if normalized in {
+        "remember this conversation",
+        "remember our conversation",
+        "save this conversation",
+    }:
+        return Intent("episode_manual_save")
+
+    if normalized in {
+        "dont save this conversation",
+        "do not save this conversation",
+    }:
+        return Intent("episode_dont_save")
+
+    if normalized in {
+        "forget our last conversation",
+        "forget the last conversation",
+    }:
+        return Intent("episode_forget_last")
+
     episode_continue = re.match(
         r"^(?:continue|resume)\s+(?:our|the)\s+(.+?)(?:\s+discussion)?$",
         normalized,

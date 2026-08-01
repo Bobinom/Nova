@@ -191,6 +191,40 @@ class ConversationRepository:
             connection.execute("DELETE FROM conversation_episodes")
             connection.commit()
 
+    def prune_episodes(
+        self,
+        *,
+        max_count: int,
+        retention_days: int,
+    ) -> int:
+        with self._lock:
+            connection = self._require_connection()
+            deleted = 0
+            if retention_days > 0:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM conversation_episodes
+                    WHERE created_at < datetime('now', ?)
+                    """,
+                    (f"-{retention_days} days",),
+                )
+                deleted += cursor.rowcount
+            if max_count > 0:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM conversation_episodes
+                    WHERE id NOT IN (
+                        SELECT id FROM conversation_episodes
+                        ORDER BY id DESC
+                        LIMIT ?
+                    )
+                    """,
+                    (max_count,),
+                )
+                deleted += cursor.rowcount
+            connection.commit()
+            return deleted
+
     def close(self) -> None:
         with self._lock:
             if self._connection is not None:

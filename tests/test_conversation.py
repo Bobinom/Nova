@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +7,7 @@ from pathlib import Path
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
 from nova.core.events import EventBus
+from nova.core.settings import SettingsManager
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 
@@ -30,7 +32,7 @@ class SequencedLLM(RecordingLLM):
 
 
 class ConversationTests(unittest.TestCase):
-    def make_manager(self, database: Path, llm=None):
+    def make_manager(self, database: Path, llm=None, settings=None):
         events = EventBus(logging.getLogger("test.conversation"))
         memory = MemoryEngine(
             repository=MemoryRepository(database),
@@ -45,6 +47,7 @@ class ConversationTests(unittest.TestCase):
             events=events,
             logger=logging.getLogger("test.manager"),
             llm=llm,
+            settings=settings,
         )
         manager.initialize()
         return manager, memory
@@ -56,6 +59,168 @@ class ConversationTests(unittest.TestCase):
             result = manager.handle("What color do I like?")
 
             self.assertEqual(result["response"], "Your favorite color is Amber.")
+            manager.close()
+            memory.close()
+
+    def test_episode_auto_save_can_be_disabled_and_manually_overridden(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.set_episode_auto_save(False)
+
+            manager.handle("Plan a quiet workstation for music production")
+            self.assertEqual(manager.episodes(), [])
+
+            result = manager.handle("Remember this conversation")
+            self.assertEqual(result["response"], "Conversation remembered.")
+            self.assertEqual(len(manager.episodes()), 1)
+            manager.close()
+            memory.close()
+
+    def test_dont_save_and_forget_last_remove_latest_episode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Plan a quiet workstation for music production")
+
+            result = manager.handle("Don't save this conversation")
+            self.assertEqual(
+                result["response"],
+                "Okay, I won't keep that conversation.",
+            )
+            self.assertEqual(manager.episodes(), [])
+
+            manager.handle("Compare microphones for recording vocals")
+            result = manager.handle("Forget our last conversation")
+            self.assertEqual(result["response"], "Last conversation forgotten.")
+            self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_dont_save_removes_hidden_duplicate_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            prompt = "Plan a Ryzen PC upgrade"
+            manager.repository.add_episode(
+                topic="PC upgrade",
+                summary="Failed attempt",
+                user_text=prompt,
+                assistant_text="I couldn't connect to Ollama.",
+            )
+            manager.repository.add_episode(
+                topic="PC upgrade Ryzen",
+                summary="Successful attempt",
+                user_text=prompt,
+                assistant_text=(
+                    "Compare the Ryzen processor, graphics card, motherboard, "
+                    "memory, storage, case, cooling, and power supply before "
+                    "choosing compatible PC upgrade parts."
+                ),
+            )
+
+            result = manager.handle("Don't save this conversation")
+
+            self.assertEqual(
+                result["response"],
+                "Okay, I won't keep that conversation.",
+            )
+            self.assertEqual(manager.repository.list_episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_protected_semantic_memory_requires_confirmation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            manager.set_semantic_confirmation(True)
+
+            pending = manager.handle("My dog is Max")
+            self.assertEqual(pending["intent"], "confirm_memory")
+            self.assertIsNone(memory.recall("pet.dog"))
+
+            confirmed = manager.handle("yes")
+            self.assertEqual(confirmed["intent"], "remember_unique")
+            self.assertEqual(memory.recall("pet.dog").value, "Max")
+
+            manager.handle("I work at IKEA")
+            cancelled = manager.handle("no")
+            self.assertEqual(cancelled["intent"], "memory_confirmation_cancelled")
+            self.assertIsNone(memory.recall("work.employer"))
+            manager.close()
+            memory.close()
+
+    def test_privacy_settings_persist_between_managers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings_path = root / "settings.json"
+            settings = SettingsManager(settings_path)
+            settings.load()
+            manager, memory = self.make_manager(
+                root / "nova.db",
+                settings=settings,
+            )
+            manager.set_episode_auto_save(False)
+            manager.set_semantic_confirmation(True)
+            manager.close()
+            memory.close()
+
+            reloaded = SettingsManager(settings_path)
+            reloaded.load()
+            manager2, memory2 = self.make_manager(
+                root / "nova.db",
+                settings=reloaded,
+            )
+            status = manager2.privacy_status()
+            self.assertFalse(status["episode_auto_save"])
+            self.assertTrue(status["confirm_semantic_memory"])
+            manager2.close()
+            memory2.close()
+
+    def test_episode_count_retention_prunes_oldest_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.set_episode_retention(max_episodes=2)
+
+            manager.handle("Plan a quiet workstation for music production")
+            manager.handle("Compare microphones for recording vocals")
+            manager.handle("Choose acoustic panels for the studio walls")
+
+            episodes = manager.episodes()
+            self.assertEqual(len(episodes), 2)
+            self.assertNotIn("quiet workstation", str(episodes))
+            manager.close()
+            memory.close()
+
+    def test_episode_age_retention_prunes_expired_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "nova.db"
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(database, llm=llm)
+            manager.handle("Plan a quiet workstation for music production")
+
+            connection = sqlite3.connect(database)
+            connection.execute(
+                """
+                UPDATE conversation_episodes
+                SET created_at = datetime('now', '-10 days')
+                """
+            )
+            connection.commit()
+            connection.close()
+
+            deleted = manager.set_episode_retention(retention_days=7)
+
+            self.assertEqual(deleted, 1)
+            self.assertEqual(manager.episodes(), [])
             manager.close()
             memory.close()
 

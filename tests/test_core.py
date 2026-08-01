@@ -9,7 +9,7 @@ from nova.core.state import StateStore
 
 class CoreTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "5.0.0")
+        self.assertEqual(__version__, "5.1.0")
 
     def test_status_uses_release_version(self):
         status = NovaStatus(
@@ -21,7 +21,7 @@ class CoreTests(unittest.TestCase):
             conversation_episodes=2,
         ).as_dict()
 
-        self.assertEqual(status["version"], "5.0.0")
+        self.assertEqual(status["version"], "5.1.0")
         self.assertEqual(status["conversation_episodes"], 2)
 
     def test_event_delivery(self):
@@ -40,6 +40,23 @@ class CoreTests(unittest.TestCase):
             r = SettingsManager(p)
             r.load()
             self.assertTrue(r.get("privacy.allow_web_access"))
+
+    def test_memory_privacy_defaults_and_persistence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            settings = SettingsManager(path)
+            settings.load()
+
+            self.assertTrue(settings.get("privacy.episode_auto_save"))
+            self.assertFalse(settings.get("privacy.confirm_semantic_memory"))
+            self.assertEqual(settings.get("privacy.max_episodes"), 200)
+            self.assertEqual(settings.get("privacy.retention_days"), 0)
+            self.assertEqual(settings.get("application.version"), __version__)
+
+            settings.set("privacy.episode_auto_save", False)
+            reloaded = SettingsManager(path)
+            reloaded.load()
+            self.assertFalse(reloaded.get("privacy.episode_auto_save"))
 
     def test_state_round_trip(self):
         with tempfile.TemporaryDirectory() as d:

@@ -8,6 +8,7 @@ from typing import Any
 from nova.conversation.intent import Intent, classify
 from nova.conversation.models import ConversationEpisode
 from nova.conversation.repository import ConversationRepository
+from nova.core.settings import SettingsManager
 from nova.llm.prompts import NOVA_SYSTEM_PROMPT
 from nova.llm.service import LLMService
 from nova.memory.engine import MemoryEngine
@@ -54,13 +55,17 @@ class ConversationManager:
         events: Any,
         logger: Any,
         llm: LLMService | None = None,
+        settings: SettingsManager | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
         self.events = events
         self.logger = logger
         self.llm = llm
+        self.settings = settings
         self.last_topic: str | None = None
+        self._privacy_overrides: dict[str, Any] = {}
+        self._pending_memory: Intent | None = None
 
     def initialize(self) -> None:
         self.repository.initialize()
@@ -79,14 +84,25 @@ class ConversationManager:
 
         self.repository.add("user", text)
 
-        intent = classify(text, self.last_topic)
-        result = self._execute(intent, text)
+        normalized = re.sub(r"[^\w\s]", "", text.lower()).strip()
+        confirmed = False
+        if self._pending_memory and normalized in {"yes", "confirm", "save it"}:
+            intent = self._pending_memory
+            self._pending_memory = None
+            confirmed = True
+        elif self._pending_memory and normalized in {"no", "cancel", "dont save it"}:
+            self._pending_memory = None
+            intent = Intent("memory_confirmation_cancelled")
+        else:
+            self._pending_memory = None
+            intent = classify(text, self.last_topic)
+        result = self._execute(intent, text, confirmed=confirmed)
 
         record_episode = bool(result.pop("_record_episode", False))
 
         response = str(result["response"])
         self.repository.add("assistant", response)
-        if record_episode:
+        if record_episode and self._episode_auto_save_enabled():
             self._record_episode(text, response)
         self.events.emit("assistant.response", result)
 
@@ -116,11 +132,101 @@ class ConversationManager:
     def clear_episodes(self) -> None:
         self.repository.clear_episodes()
 
+    def privacy_status(self) -> dict[str, Any]:
+        return {
+            "episode_auto_save": self._episode_auto_save_enabled(),
+            "confirm_semantic_memory": self._semantic_confirmation_enabled(),
+            "max_episodes": self._privacy_int("max_episodes", 200),
+            "retention_days": self._privacy_int("retention_days", 0),
+        }
+
+    def set_episode_auto_save(self, enabled: bool) -> None:
+        self._set_privacy("episode_auto_save", enabled)
+
+    def set_semantic_confirmation(self, enabled: bool) -> None:
+        self._set_privacy("confirm_semantic_memory", enabled)
+
+    def set_episode_retention(
+        self,
+        *,
+        max_episodes: int | None = None,
+        retention_days: int | None = None,
+    ) -> int:
+        if max_episodes is not None:
+            self._set_privacy("max_episodes", max(0, max_episodes))
+        if retention_days is not None:
+            self._set_privacy("retention_days", max(0, retention_days))
+        return self._prune_episodes()
+
     def _execute(
         self,
         intent: Intent,
         text: str,
+        *,
+        confirmed: bool = False,
     ) -> dict[str, Any]:
+        if intent.name == "memory_confirmation_cancelled":
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": "Okay, I didn't save that memory.",
+            }
+
+        if (
+            intent.name in {
+                "append_list",
+                "remember",
+                "remember_color_bundle",
+                "remember_unique",
+            }
+            and self._semantic_confirmation_enabled()
+            and not confirmed
+        ):
+            self._pending_memory = intent
+            return {
+                "handled": True,
+                "intent": "confirm_memory",
+                "response": (
+                    f"Save this memory: {intent.memory_key} = {intent.value}? "
+                    "Reply yes or no."
+                ),
+            }
+
+        if intent.name == "episode_manual_save":
+            saved = self._save_previous_conversation()
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": (
+                    "Conversation remembered."
+                    if saved
+                    else "I couldn't find a safe conversation to save."
+                ),
+            }
+
+        if intent.name == "episode_dont_save":
+            deleted = self._delete_latest_episode()
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": (
+                    "Okay, I won't keep that conversation."
+                    if deleted
+                    else "No saved conversation was found."
+                ),
+            }
+
+        if intent.name == "episode_forget_last":
+            deleted = self._delete_latest_episode()
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": (
+                    "Last conversation forgotten."
+                    if deleted
+                    else "No saved conversation was found."
+                ),
+            }
         if intent.name == "incomplete":
             prompts = {
                 "name": "What would you like me to know about your name?",
@@ -371,17 +477,17 @@ class ConversationManager:
             prompt=text,
         )
 
-    def _record_episode(self, user_text: str, assistant_text: str) -> None:
+    def _record_episode(self, user_text: str, assistant_text: str) -> bool:
         normalized = re.sub(r"[^\w\s]", "", user_text.lower()).strip()
         if normalized in self._TRIVIAL_EPISODE_TEXT:
-            return
+            return False
         if any(term in normalized for term in self._SENSITIVE_EPISODE_TERMS):
-            return
+            return False
         if self._is_failed_response(assistant_text):
-            return
+            return False
         terms = self._episode_terms(user_text)
         if len(normalized.split()) < 3 or not terms:
-            return
+            return False
         topic = self._episode_topic(user_text)
         user_summary = self._truncate(user_text, 220)
         assistant_summary = self._truncate(assistant_text, 280)
@@ -400,6 +506,71 @@ class ConversationManager:
             self.repository.update_episode(duplicate.id, **episode_data)
         else:
             self.repository.add_episode(**episode_data)
+        self._prune_episodes()
+        return True
+
+    def _save_previous_conversation(self) -> bool:
+        turns = self.repository.recent(20)
+        for index in range(len(turns) - 2, 0, -1):
+            if turns[index].role != "assistant":
+                continue
+            previous = turns[index - 1]
+            if previous.role == "user":
+                return self._record_episode(previous.text, turns[index].text)
+        return False
+
+    def _delete_latest_episode(self) -> bool:
+        stored = self.repository.list_episodes(200)
+        episodes = self._quality_episodes(stored)
+        if not episodes:
+            return False
+        target = episodes[0]
+        deleted = False
+        for episode in stored:
+            if (
+                episode.id == target.id
+                or self._episode_similarity(
+                    episode.user_text,
+                    target.user_text,
+                ) >= 0.85
+                or self._episodes_are_duplicates(
+                    episode.user_text,
+                    episode.assistant_text,
+                    target.user_text,
+                    target.assistant_text,
+                )
+            ):
+                deleted = self.repository.delete_episode(episode.id) or deleted
+        return deleted
+
+    def _episode_auto_save_enabled(self) -> bool:
+        return bool(self._privacy_value("episode_auto_save", True))
+
+    def _semantic_confirmation_enabled(self) -> bool:
+        return bool(self._privacy_value("confirm_semantic_memory", False))
+
+    def _privacy_int(self, key: str, default: int) -> int:
+        value = self._privacy_value(key, default)
+        return int(value) if isinstance(value, int) else default
+
+    def _privacy_value(self, key: str, default: Any) -> Any:
+        if key in self._privacy_overrides:
+            return self._privacy_overrides[key]
+        if self.settings is None:
+            return default
+        return self.settings.get(f"privacy.{key}", default)
+
+    def _set_privacy(self, key: str, value: Any) -> None:
+        if self.settings is None:
+            self._privacy_overrides[key] = value
+        else:
+            self.settings.set(f"privacy.{key}", value)
+
+    def _prune_episodes(self) -> int:
+        return self.repository.prune_episodes(
+            max_count=self._privacy_int("max_episodes", 200),
+            retention_days=self._privacy_int("retention_days", 0),
+        )
 
     def _search_episodes(
         self,

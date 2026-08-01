@@ -70,6 +70,7 @@ class NovaApplication:
             events=self.events,
             logger=self.logger.getChild("conversation"),
             llm=self.llm,
+            settings=self.settings,
         )
 
         self._running = False
