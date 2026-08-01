@@ -83,6 +83,10 @@ def main() -> None:
     print("  status")
     print("  memory")
     print("  memory <category>")
+    print("  memory-explain <query>")
+    print("  memory-maintain [minimum-confidence]")
+    print("  archived-memories")
+    print("  restore-memory <memory-key>")
     print("  memories")
     print("  history")
     print("  clear-history")
@@ -143,6 +147,48 @@ def main() -> None:
 
             if raw.startswith("memory "):
                 _print_memories(app, raw[7:].strip())
+                continue
+
+            if raw.startswith("memory-explain "):
+                query = raw[len("memory-explain "):].strip()
+                explanation = app.memory.explain_search(query)
+                if not explanation["matches"]:
+                    print("No relevant memories found.")
+                else:
+                    for match in explanation["matches"]:
+                        memory = match["memory"]
+                        reasons = "; ".join(match["reasons"])
+                        print(
+                            f"{memory['key']} (score {match['score']}): {reasons}"
+                        )
+                continue
+
+            if raw == "memory-maintain" or raw.startswith("memory-maintain "):
+                value = raw[len("memory-maintain"):].strip()
+                try:
+                    threshold = float(value) if value else 0.5
+                except ValueError:
+                    print("Use: memory-maintain [minimum-confidence]")
+                else:
+                    print(app.memory.maintain(threshold))
+                continue
+
+            if raw == "archived-memories":
+                archived = app.memory.archived_memories()
+                if not archived:
+                    print("No archived memories.")
+                else:
+                    for memory in archived:
+                        print(
+                            f"{memory['key']}: {memory['value']} "
+                            f"({memory['reason']})"
+                        )
+                continue
+
+            if raw.startswith("restore-memory "):
+                key = raw[len("restore-memory "):].strip()
+                restored = app.memory.restore_archived(key)
+                print("Memory restored." if restored else "Archived memory not found.")
                 continue
 
             if raw == "history":

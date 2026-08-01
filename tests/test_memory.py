@@ -195,6 +195,143 @@ class MemoryEngineTests(unittest.TestCase):
             )
             engine.close()
 
+    def test_unique_memory_consolidates_case_and_whitespace_variants(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+
+            engine.remember_unique("user.preference", "Dark interfaces")
+            engine.remember_unique("user.preference", "  dark   interfaces ")
+
+            self.assertEqual(
+                engine.recall("user.preference").value,
+                "Dark interfaces",
+            )
+            engine.close()
+
+    def test_search_explains_scores_and_filters_weak_matches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "project.current",
+                "Nova voice assistant",
+                category="project",
+            )
+            engine.remember(
+                "work.employer",
+                "Voice Coffee",
+                category="work",
+            )
+
+            explanation = engine.explain_search("current voice project")
+
+            self.assertEqual(
+                explanation["matches"][0]["memory"]["key"],
+                "project.current",
+            )
+            self.assertIn(
+                "key terms: current, project",
+                explanation["matches"][0]["reasons"],
+            )
+            self.assertEqual(
+                engine.search("voice volume settings"),
+                [],
+            )
+            engine.close()
+
+    def test_exact_key_search_stays_deterministic_in_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember("user.location", "Malmö", category="identity")
+
+            explanation = engine.explain_search("user.location")
+
+            self.assertEqual(len(explanation["matches"]), 1)
+            self.assertEqual(explanation["matches"][0]["score"], 100)
+            self.assertEqual(
+                explanation["matches"][0]["reasons"],
+                ["exact key match"],
+            )
+            engine.close()
+
+    def test_maintenance_archives_low_confidence_and_restores_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "inference.favorite_drink",
+                "Coffee",
+                confidence=0.25,
+                source="inferred",
+            )
+
+            result = engine.maintain(0.5)
+
+            self.assertEqual(result["archived"], ["inference.favorite_drink"])
+            self.assertIsNone(engine.recall("inference.favorite_drink"))
+            self.assertEqual(
+                engine.archived_memories()[0]["key"],
+                "inference.favorite_drink",
+            )
+            self.assertTrue(engine.restore_archived("inference.favorite_drink"))
+            self.assertEqual(
+                engine.recall("inference.favorite_drink").value,
+                "Coffee",
+            )
+            self.assertEqual(engine.archived_memories(), [])
+            engine.close()
+
+    def test_forget_permanently_removes_an_archived_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember("inference.snack", "Popcorn", confidence=0.1)
+            engine.maintain()
+
+            self.assertTrue(engine.forget_matching("inference.snack", "Popcorn"))
+            self.assertEqual(engine.archived_memories(), [])
+            self.assertFalse(engine.restore_archived("inference.snack"))
+            engine.close()
+
+    def test_natural_category_forget_removes_archived_memories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember("pet.dog", "Max", category="pet", confidence=0.1)
+            engine.maintain()
+
+            result = engine.process_text("Forget what you know about my pets")
+
+            self.assertTrue(result["deleted"])
+            self.assertEqual(engine.archived_memories(), [])
+            engine.close()
+
+    def test_relearning_an_archived_key_replaces_the_archived_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember("inference.snack", "Popcorn", confidence=0.1)
+            engine.maintain()
+
+            engine.remember("inference.snack", "Fruit", confidence=1.0)
+
+            self.assertEqual(engine.recall("inference.snack").value, "Fruit")
+            self.assertEqual(engine.archived_memories(), [])
+            engine.close()
+
+    def test_maintenance_normalizes_existing_list_duplicates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "user.preference",
+                ["Concise answers", "concise  answers", "Dark UI"],
+                category="preference",
+            )
+
+            result = engine.maintain()
+
+            self.assertEqual(result["normalized"], ["user.preference"])
+            self.assertEqual(
+                engine.recall("user.preference").value,
+                ["Concise answers", "Dark UI"],
+            )
+            engine.close()
+
 
 if __name__ == "__main__":
     unittest.main()

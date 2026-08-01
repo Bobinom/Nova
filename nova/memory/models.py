@@ -24,3 +24,17 @@ class MemoryRecord:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+
+
+@dataclass(frozen=True)
+class MemorySearchMatch:
+    record: MemoryRecord
+    score: int
+    reasons: tuple[str, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "memory": self.record.as_dict(),
+            "score": self.score,
+            "reasons": list(self.reasons),
+        }

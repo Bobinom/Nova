@@ -154,6 +154,7 @@ class NovaApplication:
 
     def privacy_audit(self) -> dict[str, Any]:
         memories = self.memory.list_memories()
+        archived_memories = self.memory.archived_memories()
         categories: dict[str, int] = {}
         for memory in memories:
             categories[memory.category] = categories.get(memory.category, 0) + 1
@@ -161,6 +162,7 @@ class NovaApplication:
             "database": str(self.paths.database_file),
             "database_bytes": self.paths.database_file.stat().st_size,
             "semantic_memories": len(memories),
+            "archived_semantic_memories": len(archived_memories),
             "memory_categories": categories,
             "conversation_turns": len(self.conversation.history(1000)),
             "conversation_episodes": len(self.conversation.episodes(1000)),
@@ -171,7 +173,7 @@ class NovaApplication:
     def export_memory(self, destination: Path | None = None) -> Path:
         payload = {
             "format": "nova-memory-export",
-            "format_version": 1,
+            "format_version": 2,
             "nova_version": __version__,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "audit": self.privacy_audit(),
@@ -179,6 +181,7 @@ class NovaApplication:
                 memory.as_dict()
                 for memory in self.memory.list_memories()
             ],
+            "archived_semantic_memories": self.memory.archived_memories(),
             "conversation_episodes": self.conversation.episodes(1000),
             "conversation_sessions": self.conversation.sessions(1000),
         }

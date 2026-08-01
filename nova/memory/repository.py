@@ -38,6 +38,21 @@ class MemoryRepository:
                 ON memories(category)
                 """
             )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_archive (
+                    memory_key TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    value_json TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    archive_reason TEXT NOT NULL
+                )
+                """
+            )
             self._connection.commit()
 
     def upsert(
@@ -71,6 +86,10 @@ class MemoryRepository:
                     confidence,
                     source,
                 ),
+            )
+            connection.execute(
+                "DELETE FROM memory_archive WHERE memory_key = ?",
+                (key,),
             )
             connection.commit()
             record = self.get(key)
@@ -119,12 +138,116 @@ class MemoryRepository:
     def delete(self, key: str) -> bool:
         with self._lock:
             connection = self._require_connection()
-            cursor = connection.execute(
+            active = connection.execute(
                 "DELETE FROM memories WHERE memory_key = ?",
                 (key,),
             )
+            archived = connection.execute(
+                "DELETE FROM memory_archive WHERE memory_key = ?",
+                (key,),
+            )
             connection.commit()
-            return cursor.rowcount > 0
+            return active.rowcount > 0 or archived.rowcount > 0
+
+    def archive(self, key: str, reason: str) -> bool:
+        with self._lock:
+            connection = self._require_connection()
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO memory_archive (
+                        memory_key, category, value_json, confidence, source,
+                        created_at, updated_at, archive_reason
+                    )
+                    SELECT memory_key, category, value_json, confidence, source,
+                           created_at, updated_at, ?
+                    FROM memories WHERE memory_key = ?
+                    ON CONFLICT(memory_key) DO UPDATE SET
+                        category = excluded.category,
+                        value_json = excluded.value_json,
+                        confidence = excluded.confidence,
+                        source = excluded.source,
+                        created_at = excluded.created_at,
+                        updated_at = excluded.updated_at,
+                        archived_at = CURRENT_TIMESTAMP,
+                        archive_reason = excluded.archive_reason
+                    """,
+                    (reason, key),
+                )
+                if cursor.rowcount == 0:
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    "DELETE FROM memories WHERE memory_key = ?",
+                    (key,),
+                )
+                connection.commit()
+                return True
+            except Exception:
+                connection.rollback()
+                raise
+
+    def list_archived(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._require_connection().execute(
+                """
+                SELECT memory_key, category, value_json, confidence, source,
+                       created_at, updated_at, archived_at, archive_reason
+                FROM memory_archive
+                ORDER BY archived_at DESC, memory_key
+                """
+            ).fetchall()
+            return [
+                {
+                    "key": row["memory_key"],
+                    "category": row["category"],
+                    "value": json.loads(row["value_json"]),
+                    "confidence": float(row["confidence"]),
+                    "source": row["source"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "archived_at": row["archived_at"],
+                    "reason": row["archive_reason"],
+                }
+                for row in rows
+            ]
+
+    def restore_archived(self, key: str) -> bool:
+        with self._lock:
+            connection = self._require_connection()
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO memories (
+                        memory_key, category, value_json, confidence, source,
+                        created_at, updated_at
+                    )
+                    SELECT memory_key, category, value_json, confidence, source,
+                           created_at, CURRENT_TIMESTAMP
+                    FROM memory_archive WHERE memory_key = ?
+                    ON CONFLICT(memory_key) DO UPDATE SET
+                        category = excluded.category,
+                        value_json = excluded.value_json,
+                        confidence = excluded.confidence,
+                        source = excluded.source,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (key,),
+                )
+                if cursor.rowcount == 0:
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    "DELETE FROM memory_archive WHERE memory_key = ?",
+                    (key,),
+                )
+                connection.commit()
+                return True
+            except Exception:
+                connection.rollback()
+                raise
 
     def close(self) -> None:
         with self._lock:
