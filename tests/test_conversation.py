@@ -164,6 +164,64 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_correction_updates_existing_semantic_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            manager.handle("I work at Espresso House")
+
+            result = manager.handle("Actually, I work at IKEA now")
+
+            self.assertEqual(result["intent"], "remember")
+            self.assertEqual(memory.recall("work.employer").value, "IKEA")
+            self.assertEqual(len(memory.list_memories("work")), 1)
+            manager.close()
+            memory.close()
+
+    def test_no_longer_forgets_only_matching_relationship(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            manager.handle("My girlfriend is Dunja")
+
+            mismatch = manager.handle("Anna is no longer my girlfriend")
+            self.assertEqual(mismatch["response"], "I couldn't find that memory.")
+            self.assertIsNotNone(memory.recall("relationship.girlfriend"))
+
+            result = manager.handle("Dunja is no longer my girlfriend")
+            self.assertEqual(result["response"], "Forgotten.")
+            self.assertIsNone(memory.recall("relationship.girlfriend"))
+            manager.close()
+            memory.close()
+
+    def test_explicit_category_forget_removes_all_pets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            manager.handle("My dog is Max")
+            manager.handle("My cat is Luna")
+
+            result = manager.handle("Forget what you know about my pets")
+
+            self.assertEqual(result["response"], "Forgotten.")
+            self.assertEqual(memory.list_memories("pet"), [])
+            manager.close()
+            memory.close()
+
+    def test_searchable_recall_is_answered_without_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("I'm working on Nova")
+
+            result = manager.handle("What do you remember about my projects?")
+
+            self.assertEqual(result["intent"], "search_memory")
+            self.assertIn("project.current: Nova", result["response"])
+            self.assertEqual(llm.calls, [])
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()

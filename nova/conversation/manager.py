@@ -102,6 +102,39 @@ class ConversationManager:
                 ),
             }
 
+        if intent.name == "remember_unique":
+            record = self.memory.remember_unique(
+                intent.memory_key,
+                intent.value,
+                category=intent.category or "general",
+            )
+            self.last_topic = intent.memory_key
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": self._remember_response(record.key, intent.value),
+            }
+
+        if intent.name == "forget":
+            deleted = self._forget_memory(intent)
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": (
+                    "Forgotten."
+                    if deleted
+                    else "I couldn't find that memory."
+                ),
+            }
+
+        if intent.name == "search_memory":
+            records = self.memory.search(str(intent.value))
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": self.memory.search_response(records),
+            }
+
         if intent.name == "remember_color_bundle":
             values = list(intent.value or [])
             favorite = values[0]
@@ -218,6 +251,23 @@ class ConversationManager:
                 "but no language model is configured yet."
             ),
         }
+
+    def _forget_memory(self, intent: Intent) -> bool:
+        if intent.category:
+            records = self.memory.list_memories(intent.category)
+            for record in records:
+                self.memory.forget(record.key)
+            return bool(records)
+
+        record = self.memory.recall(intent.memory_key)
+        if record is None:
+            return False
+        if intent.value is not None and not self.memory.matches_value(
+            record.value,
+            str(intent.value),
+        ):
+            return False
+        return self.memory.forget(intent.memory_key)
 
     def _memory_context(self, query: str) -> str:
         memories = self.memory.search(query)

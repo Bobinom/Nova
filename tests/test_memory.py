@@ -154,6 +154,47 @@ class MemoryEngineTests(unittest.TestCase):
             self.assertEqual(engine.list_memories(), [])
             engine.close()
 
+    def test_event_path_updates_and_forgets_matching_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("I work at Espresso House")
+            engine.process_text("Actually, I work at IKEA now")
+
+            self.assertEqual(engine.recall("work.employer").value, "IKEA")
+
+            result = engine.process_text("I no longer work at IKEA")
+
+            self.assertTrue(result["deleted"])
+            self.assertIsNone(engine.recall("work.employer"))
+            engine.close()
+
+    def test_natural_location_forget(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("I live in Malmö")
+
+            result = engine.process_text("Forget where I live")
+
+            self.assertTrue(result["deleted"])
+            self.assertIsNone(engine.recall("user.location"))
+            engine.close()
+
+    def test_repeated_pet_and_preference_facts_remain_unique(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("My dog is Max")
+            engine.process_text("My dog is Rex")
+            engine.process_text("My dog is Max")
+            engine.process_text("I prefer dark interfaces")
+            engine.process_text("I prefer concise answers")
+
+            self.assertEqual(engine.recall("pet.dog").value, ["Max", "Rex"])
+            self.assertEqual(
+                engine.recall("user.preference").value,
+                ["dark interfaces", "concise answers"],
+            )
+            engine.close()
+
 
 if __name__ == "__main__":
     unittest.main()

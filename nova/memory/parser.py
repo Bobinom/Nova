@@ -11,6 +11,13 @@ class LearnedFact:
     value: str
 
 
+@dataclass(frozen=True)
+class ForgetRequest:
+    key: str | None = None
+    category: str | None = None
+    expected_value: str | None = None
+
+
 _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
     (
         re.compile(r"^\s*(?:my name is|i am called|call me)\s+(.+?)\s*[.!]?\s*$", re.I),
@@ -56,7 +63,11 @@ _SEMANTIC_PATTERNS: list[
         "pet",
     ),
     (
-        re.compile(r"^\s*i work (?:at|for)\s+(.+?)\s*[.!]?\s*$", re.I),
+        re.compile(
+            r"^\s*i (?:now )?work (?:at|for)\s+(.+?)"
+            r"(?:\s+now)?\s*[.!]?\s*$",
+            re.I,
+        ),
         "work",
         "work.employer",
     ),
@@ -87,20 +98,49 @@ _SEMANTIC_PATTERNS: list[
 
 _UNSAFE_VALUE_PREFIXES = ("maybe ", "not ", "probably ", "possibly ")
 
+_FORGET_KEYS = {
+    "birthday": "user.birthday",
+    "boyfriend": "relationship.boyfriend",
+    "cat": "pet.cat",
+    "dog": "pet.dog",
+    "employer": "work.employer",
+    "favorite color": "user.favorite_color",
+    "favourite colour": "user.favorite_color",
+    "girlfriend": "relationship.girlfriend",
+    "goal": "goal.primary",
+    "location": "user.location",
+    "name": "user.name",
+    "partner": "relationship.partner",
+    "preference": "user.preference",
+    "project": "project.current",
+    "spouse": "relationship.spouse",
+}
+
+_FORGET_CATEGORIES = {
+    "goals": "goal",
+    "pets": "pet",
+    "preferences": "preference",
+    "projects": "project",
+    "relationships": "relationship",
+    "work": "work",
+}
+
 
 def extract_fact(text: str) -> LearnedFact | None:
     if text.rstrip().endswith("?"):
         return None
 
+    normalized_text = re.sub(r"^\s*actually[,]?\s+", "", text, flags=re.I)
+
     for pattern, key, category in _PATTERNS:
-        match = pattern.match(text)
+        match = pattern.match(normalized_text)
         if match:
             value = _safe_value(match.group(1))
             if value is not None:
                 return LearnedFact(key=key, category=category, value=value)
 
     for pattern, category, key in _SEMANTIC_PATTERNS:
-        match = pattern.match(text)
+        match = pattern.match(normalized_text)
         if not match:
             continue
 
@@ -120,6 +160,73 @@ def extract_fact(text: str) -> LearnedFact | None:
                 value=value,
             )
     return None
+
+
+def extract_forget_request(text: str) -> ForgetRequest | None:
+    normalized = text.strip(" \t\r\n.!?")
+
+    category_match = re.fullmatch(
+        r"forget what you know about my\s+"
+        r"(goals|pets|preferences|projects|relationships|work)",
+        normalized,
+        re.I,
+    )
+    if category_match:
+        return ForgetRequest(
+            category=_FORGET_CATEGORIES[category_match.group(1).lower()],
+        )
+
+    if re.fullmatch(r"forget where i work", normalized, re.I):
+        return ForgetRequest(key="work.employer")
+
+    if re.fullmatch(r"forget where i live", normalized, re.I):
+        return ForgetRequest(key="user.location")
+
+    key_match = re.fullmatch(
+        r"forget (?:my|where i live|what my)\s+(.+)",
+        normalized,
+        re.I,
+    )
+    if key_match:
+        key = _FORGET_KEYS.get(key_match.group(1).lower())
+        if key:
+            return ForgetRequest(key=key)
+
+    relationship_match = re.fullmatch(
+        r"(.+?)\s+is no longer my\s+"
+        r"(girlfriend|boyfriend|partner|spouse)",
+        normalized,
+        re.I,
+    )
+    if relationship_match:
+        return ForgetRequest(
+            key=f"relationship.{relationship_match.group(2).lower()}",
+            expected_value=relationship_match.group(1).strip(),
+        )
+
+    work_match = re.fullmatch(
+        r"i no longer work (?:at|for)\s+(.+)",
+        normalized,
+        re.I,
+    )
+    if work_match:
+        return ForgetRequest(
+            key="work.employer",
+            expected_value=work_match.group(1).strip(),
+        )
+
+    return None
+
+
+def extract_search_query(text: str) -> str | None:
+    match = re.fullmatch(
+        r"what do you (?:remember|know) about\s+(.+?)\s*[?]?",
+        text.strip(),
+        re.I,
+    )
+    if not match:
+        return None
+    return re.sub(r"^my\s+", "", match.group(1), flags=re.I).strip()
 
 
 def _safe_value(value: str) -> str | None:

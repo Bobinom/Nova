@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from nova.memory.parser import extract_fact
+from nova.memory.parser import (
+    extract_fact,
+    extract_forget_request,
+    extract_search_query,
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +22,19 @@ class Intent:
 def classify(text: str, last_topic: str | None = None) -> Intent:
     raw = text.strip()
     normalized = _normalize(raw)
+
+    forget = extract_forget_request(raw)
+    if forget is not None:
+        return Intent(
+            "forget",
+            forget.key,
+            forget.expected_value,
+            forget.category,
+        )
+
+    search_query = extract_search_query(raw)
+    if search_query is not None:
+        return Intent("search_memory", value=search_query)
 
     incomplete = {
         "my name": "name",
@@ -77,8 +94,13 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
 
     fact = extract_fact(raw)
     if fact is not None:
+        action = (
+            "remember_unique"
+            if fact.key.startswith("pet.") or fact.key == "user.preference"
+            else "remember"
+        )
         return Intent(
-            "remember",
+            action,
             fact.key,
             fact.value,
             fact.category,
