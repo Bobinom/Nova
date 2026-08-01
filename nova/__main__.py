@@ -1,3 +1,4 @@
+import shlex
 from pathlib import Path
 
 from nova import __version__
@@ -111,6 +112,16 @@ def main() -> None:
     print("  clear-sessions")
     print("  health")
     print("  recoveries")
+    print("  voice-status")
+    print("  voice-on | voice-off")
+    print("  voice-auto <on|off>")
+    print("  say <text>")
+    print("  listen")
+    print("  voice-input <local-command>")
+    print("  voice-input-clear")
+    print("  actions-status")
+    print("  actions-on | actions-off")
+    print("  action-websites <on|off>")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -139,6 +150,76 @@ def main() -> None:
                         print(recovery)
                 else:
                     print("No quarantined databases.")
+                continue
+
+            if raw == "voice-status":
+                print(app.voice.status())
+                continue
+
+            if raw in {"voice-on", "voice-off"}:
+                enabled = raw == "voice-on"
+                app.voice.set_enabled(enabled)
+                print(f"Voice mode {'enabled' if enabled else 'disabled'}.")
+                continue
+
+            if raw.startswith("voice-auto "):
+                value = raw[len("voice-auto "):].strip().lower()
+                if value not in {"on", "off"}:
+                    print("Use: voice-auto <on|off>")
+                else:
+                    app.voice.set_auto_speak(value == "on")
+                    print(f"Automatic speech {value}.")
+                continue
+
+            if raw.startswith("say "):
+                try:
+                    app.voice.speak(raw[len("say "):].strip(), force=True)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    print(f"Speech failed: {exc}")
+                continue
+
+            if raw == "listen":
+                try:
+                    result = app.listen_and_respond()
+                except (OSError, RuntimeError, ValueError) as exc:
+                    print(f"Listening failed: {exc}")
+                else:
+                    print(f"You: {result['transcript']}")
+                    print(f"Nova: {result['response']}")
+                continue
+
+            if raw.startswith("voice-input "):
+                try:
+                    command = shlex.split(raw[len("voice-input "):].strip())
+                except ValueError as exc:
+                    print(f"Invalid command: {exc}")
+                else:
+                    app.voice.set_input_command(command)
+                    print("Local microphone transcription command saved.")
+                continue
+
+            if raw == "voice-input-clear":
+                app.voice.set_input_command([])
+                print("Local microphone transcription command cleared.")
+                continue
+
+            if raw == "actions-status":
+                print(app.actions.status())
+                continue
+
+            if raw in {"actions-on", "actions-off"}:
+                enabled = raw == "actions-on"
+                app.actions.set_enabled(enabled)
+                print(f"Computer actions {'enabled' if enabled else 'disabled'}.")
+                continue
+
+            if raw.startswith("action-websites "):
+                value = raw[len("action-websites "):].strip().lower()
+                if value not in {"on", "off"}:
+                    print("Use: action-websites <on|off>")
+                else:
+                    app.actions.set_websites_enabled(value == "on")
+                    print(f"Website actions {value}.")
                 continue
 
             if raw in {"memory", "memories"}:

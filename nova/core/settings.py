@@ -14,6 +14,21 @@ DEFAULT_SETTINGS = {
         "max_episodes": 200,
         "retention_days": 0,
     },
+    "voice": {
+        "enabled": False,
+        "auto_speak": False,
+        "name": None,
+        "rate": 190,
+        "input_command": [],
+    },
+    "actions": {
+        "enabled": False,
+        "allow_websites": False,
+        "allowed_apps": [
+            "Calendar", "Finder", "Mail", "Maps", "Messages",
+            "Music", "Notes", "Safari", "System Settings",
+        ],
+    },
     "plugins": {"enabled": True}
 }
 

@@ -1,4 +1,4 @@
-# Nova 5.5
+# Nova 6.0
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -21,6 +21,9 @@ episodic memory.
 - Privacy audit, JSON memory export, and verified backup/restore
 - Persistent multi-topic conversation sessions with compact summaries
 - Versioned database migrations, startup integrity checks, and corruption quarantine
+- Native macOS speech output with optional automatic spoken responses
+- Pluggable local microphone transcription without cloud audio storage
+- Confirm-before-execution app and website actions with persistent permissions
 - Persistent local SQLite storage
 
 ## Requirements
@@ -134,7 +137,54 @@ Continue our PC upgrade discussion.
 | `clear-sessions` | Delete all session summaries |
 | `health` | Show database integrity and schema health |
 | `recoveries` | List quarantined corrupted database files |
+| `voice-status` | Show speech input/output availability and settings |
+| `voice-on` / `voice-off` | Enable or disable voice mode |
+| `voice-auto <on\|off>` | Speak Nova's responses automatically |
+| `say <text>` | Speak text immediately with macOS `say` |
+| `listen` | Capture one local transcript and send it to Nova |
+| `voice-input <local-command>` | Configure a local command that prints one transcript |
+| `voice-input-clear` | Remove the configured transcription command |
+| `actions-status` | Show action permissions and pending confirmation |
+| `actions-on` / `actions-off` | Enable or disable computer actions |
+| `action-websites <on\|off>` | Allow or block confirmed website actions |
 | `quit` | Stop Nova safely |
+
+## Voice and actions
+
+Turn on native speech and optionally speak every answer:
+
+```text
+voice-on
+voice-auto on
+say Nova voice is ready
+```
+
+Nova uses the built-in macOS `say` command, so speech output needs no cloud
+service or additional Python package. Microphone transcription is provider-based:
+configure a trusted local executable that records one utterance and prints only
+its transcript, then use `listen`:
+
+```text
+voice-input /absolute/path/to/local-transcriber --once
+listen
+```
+
+The command is stored as an argument list and executed directly without a shell.
+Audio handling belongs entirely to the configured local provider.
+
+Computer actions are deliberately narrow. Nova can open an allowlisted macOS app
+such as Safari, Notes, Calendar, Finder, or System Settings. Website opening is
+off by default. Actions themselves are also off until explicitly enabled, and
+every recognized action requires a separate confirmation:
+
+```text
+nova> actions-on
+Computer actions enabled.
+nova> Open Safari
+Nova: Confirm action: open Safari? Reply yes or no.
+nova> yes
+Nova: Done. I opened Safari.
+```
 
 ## Privacy
 
@@ -154,6 +204,9 @@ Continue our PC upgrade discussion.
 - Every restore first creates a timestamped recovery backup of the current database.
 - Startup checks database integrity before opening long-lived connections.
 - Corrupted databases are preserved under `~/.nova4/recoveries/` before Nova creates a healthy replacement.
+- Voice output stays local through macOS; Nova does not upload microphone audio.
+- Actions are disabled by default, never invoke a shell, and never execute before explicit confirmation.
+- Website actions are disabled by default and accept only HTTP or HTTPS URLs.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -171,5 +224,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 5.5 keeps the existing SQLite tables and adds a reversible memory archive without
+Nova 6.0 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.

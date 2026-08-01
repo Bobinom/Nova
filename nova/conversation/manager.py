@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from nova.actions.service import ActionService
 from nova.conversation.intent import Intent, classify
 from nova.conversation.models import ConversationEpisode, ConversationSession
 from nova.conversation.repository import ConversationRepository
@@ -56,6 +57,7 @@ class ConversationManager:
         logger: Any,
         llm: LLMService | None = None,
         settings: SettingsManager | None = None,
+        actions: ActionService | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
@@ -63,6 +65,7 @@ class ConversationManager:
         self.logger = logger
         self.llm = llm
         self.settings = settings
+        self.actions = actions
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
@@ -90,6 +93,7 @@ class ConversationManager:
 
         normalized = re.sub(r"[^\w\s]", "", text.lower()).strip()
         confirmed = False
+        result: dict[str, Any] | None = None
         if self._pending_memory and normalized in {"yes", "confirm", "save it"}:
             intent = self._pending_memory
             self._pending_memory = None
@@ -99,8 +103,17 @@ class ConversationManager:
             intent = Intent("memory_confirmation_cancelled")
         else:
             self._pending_memory = None
-            intent = classify(text, self.last_topic)
-        result = self._execute(intent, text, confirmed=confirmed)
+            action_result = (
+                self.actions.process(text)
+                if self.actions is not None
+                else {"handled": False}
+            )
+            if action_result.get("handled"):
+                result = action_result
+            else:
+                intent = classify(text, self.last_topic)
+        if result is None:
+            result = self._execute(intent, text, confirmed=confirmed)
 
         record_episode = bool(result.pop("_record_episode", False))
 
