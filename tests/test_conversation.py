@@ -713,6 +713,116 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_meaningful_turns_consolidate_into_one_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("Plan a Ryzen workstation for software development")
+            manager.handle("Compare microphones for recording vocals")
+
+            sessions = manager.sessions()
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(sessions[0]["episode_count"], 2)
+            self.assertIn("Ryzen workstation software development", sessions[0]["topic"])
+            self.assertIn("microphones recording vocals", sessions[0]["topic"])
+            self.assertIn("Plan a Ryzen workstation", sessions[0]["summary"])
+            self.assertIn("Compare microphones", sessions[0]["summary"])
+            manager.close()
+            memory.close()
+
+    def test_trivial_and_semantic_turns_do_not_create_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("Hello")
+            manager.handle("My dog is Max")
+
+            self.assertEqual(manager.sessions(), [])
+            manager.close()
+            memory.close()
+
+    def test_current_session_recall_skips_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Plan a Ryzen workstation for software development")
+            calls_before = len(llm.calls)
+
+            result = manager.handle("What did we discuss this session?")
+
+            self.assertEqual(result["intent"], "session_recall")
+            self.assertIn("Ryzen workstation", result["response"])
+            self.assertEqual(len(llm.calls), calls_before)
+            manager.close()
+            memory.close()
+
+    def test_closed_session_persists_and_new_run_starts_new_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "nova.db"
+            first_llm = RecordingLLM()
+            manager, memory = self.make_manager(database, llm=first_llm)
+            manager.handle("Plan a Ryzen workstation for software development")
+            first_id = manager.sessions()[0]["id"]
+            manager.close()
+            memory.close()
+
+            second_llm = RecordingLLM()
+            manager2, memory2 = self.make_manager(database, llm=second_llm)
+            self.assertIsNotNone(manager2.sessions()[0]["ended_at"])
+            manager2.handle("Compare microphones for recording vocals")
+
+            sessions = manager2.sessions()
+            self.assertEqual(len(sessions), 2)
+            self.assertNotEqual(sessions[0]["id"], first_id)
+            manager2.close()
+            memory2.close()
+
+    def test_relevant_prior_session_is_injected_into_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "nova.db"
+            manager, memory = self.make_manager(database, llm=RecordingLLM())
+            manager.handle("Plan a Ryzen workstation for software development")
+            manager.close()
+            memory.close()
+
+            llm = RecordingLLM()
+            manager2, memory2 = self.make_manager(database, llm=llm)
+            manager2.handle("Which Ryzen CPU suits that workstation?")
+
+            system_prompt, _, _ = llm.calls[-1]
+            self.assertIn("Relevant conversation sessions", system_prompt)
+            self.assertIn("Ryzen workstation", system_prompt)
+            manager2.close()
+            memory2.close()
+
+    def test_session_inspect_delete_and_clear(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=RecordingLLM(),
+            )
+            manager.handle("Plan a Ryzen workstation for software development")
+            session_id = manager.sessions()[0]["id"]
+
+            self.assertTrue(manager.delete_session(session_id))
+            self.assertEqual(manager.sessions(), [])
+            manager.handle("Compare microphones for recording vocals")
+            manager.clear_sessions()
+            self.assertEqual(manager.sessions(), [])
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()

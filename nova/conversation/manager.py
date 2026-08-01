@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from nova.conversation.intent import Intent, classify
-from nova.conversation.models import ConversationEpisode
+from nova.conversation.models import ConversationEpisode, ConversationSession
 from nova.conversation.repository import ConversationRepository
 from nova.core.settings import SettingsManager
 from nova.llm.prompts import NOVA_SYSTEM_PROMPT
@@ -66,11 +66,15 @@ class ConversationManager:
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
+        self._current_session_id: int | None = None
 
     def initialize(self) -> None:
         self.repository.initialize()
 
     def close(self) -> None:
+        if self._current_session_id is not None:
+            self.repository.end_session(self._current_session_id)
+            self._current_session_id = None
         self.repository.close()
 
     def handle(self, text: str) -> dict[str, Any]:
@@ -132,6 +136,19 @@ class ConversationManager:
     def clear_episodes(self) -> None:
         self.repository.clear_episodes()
 
+    def sessions(self, limit: int = 20) -> list[dict[str, Any]]:
+        return [session.as_dict() for session in self.repository.list_sessions(limit)]
+
+    def delete_session(self, session_id: int) -> bool:
+        deleted = self.repository.delete_session(session_id)
+        if deleted and self._current_session_id == session_id:
+            self._current_session_id = None
+        return deleted
+
+    def clear_sessions(self) -> None:
+        self.repository.clear_sessions()
+        self._current_session_id = None
+
     def privacy_status(self) -> dict[str, Any]:
         return {
             "episode_auto_save": self._episode_auto_save_enabled(),
@@ -170,6 +187,18 @@ class ConversationManager:
                 "handled": True,
                 "intent": intent.name,
                 "response": "Okay, I didn't save that memory.",
+            }
+
+        if intent.name == "session_recall":
+            session = self._current_session()
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": (
+                    f"This session covered {session.topic}. {session.summary}"
+                    if session is not None
+                    else "This session does not have a saved summary yet."
+                ),
             }
 
         if (
@@ -472,6 +501,7 @@ class ConversationManager:
                 NOVA_SYSTEM_PROMPT
                 + self._memory_context(text)
                 + context
+                + self._session_context(text)
             ),
             history=history,
             prompt=text,
@@ -506,8 +536,75 @@ class ConversationManager:
             self.repository.update_episode(duplicate.id, **episode_data)
         else:
             self.repository.add_episode(**episode_data)
+        self._update_current_session(topic, user_text, assistant_text)
         self._prune_episodes()
         return True
+
+    def _update_current_session(
+        self,
+        topic: str,
+        user_text: str,
+        assistant_text: str,
+    ) -> None:
+        highlight = (
+            f"{self._truncate(user_text, 70)} -> "
+            f"{self._truncate(assistant_text, 110)}"
+        )
+        if self._current_session_id is None:
+            session = self.repository.create_session(
+                topic=topic,
+                summary=f"Highlights: {highlight}",
+            )
+            self._current_session_id = session.id
+            return
+        session = self.repository.get_session(self._current_session_id)
+        topics = [item.strip() for item in session.topic.split(";") if item.strip()]
+        if topic not in topics:
+            topics.append(topic)
+        merged_topic = "; ".join(topics[-5:])
+        existing = session.summary.removeprefix("Highlights: ")
+        highlights = [item.strip() for item in existing.split(" | ") if item.strip()]
+        highlights.append(highlight)
+        summary = "Highlights: " + " | ".join(highlights[-3:])
+        self.repository.update_session(
+            session.id,
+            topic=merged_topic,
+            summary=summary,
+        )
+
+    def _current_session(self) -> ConversationSession | None:
+        if self._current_session_id is None:
+            return None
+        try:
+            return self.repository.get_session(self._current_session_id)
+        except RuntimeError:
+            self._current_session_id = None
+            return None
+
+    def _search_sessions(self, query: str, limit: int = 3) -> list[ConversationSession]:
+        terms = self._episode_terms(query)
+        ranked: list[tuple[int, int, ConversationSession]] = []
+        for session in self.repository.list_sessions(100):
+            searchable = self._episode_terms(f"{session.topic} {session.summary}")
+            score = len(terms & searchable)
+            if score:
+                ranked.append((score, session.id, session))
+        ranked.sort(key=lambda item: (-item[0], -item[1]))
+        return [session for _, _, session in ranked[:limit]]
+
+    def _session_context(self, query: str) -> str:
+        sessions = self._search_sessions(query)
+        if not sessions:
+            return ""
+        lines = [
+            f"- [{session.updated_at}] {session.topic}: {session.summary}"
+            for session in sessions
+        ]
+        return (
+            "\n\nRelevant conversation sessions:\n"
+            + "\n".join(lines)
+            + "\nUse session summaries only when relevant."
+        )
 
     def _save_previous_conversation(self) -> bool:
         turns = self.repository.recent(20)
