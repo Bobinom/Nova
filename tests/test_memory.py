@@ -116,6 +116,44 @@ class MemoryEngineTests(unittest.TestCase):
             self.assertEqual(engine.search("user.location"), [stored])
             engine.close()
 
+    def test_extracts_semantic_memories(self):
+        cases = [
+            (
+                "My girlfriend's name is Dunja",
+                "relationship.girlfriend",
+                "Dunja",
+            ),
+            ("My dog is Max", "pet.dog", "Max"),
+            ("I work at Espresso House", "work.employer", "Espresso House"),
+            ("I'm working on Nova", "project.current", "Nova"),
+            ("My goal is to build Jarvis", "goal.primary", "build Jarvis"),
+            ("I prefer dark interfaces", "user.preference", "dark interfaces"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+
+            for text, key, value in cases:
+                result = engine.process_text(text)
+                self.assertTrue(result["handled"], text)
+                self.assertEqual(engine.recall(key).value, value)
+
+            engine.close()
+
+    def test_does_not_learn_questions_or_uncertain_facts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+
+            question = engine.process_text("My dog is Max?")
+            uncertainty = engine.process_text("My dog is maybe Max")
+            third_person = engine.process_text("Dunja's dog is Max")
+
+            self.assertFalse(question["handled"])
+            self.assertFalse(uncertainty["handled"])
+            self.assertFalse(third_person["handled"])
+            self.assertEqual(engine.list_memories(), [])
+            engine.close()
+
 
 if __name__ == "__main__":
     unittest.main()

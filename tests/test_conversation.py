@@ -141,6 +141,29 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_conversation_learns_semantic_fact_before_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            result = manager.handle("My girlfriend's name is Dunja")
+
+            self.assertEqual(result["intent"], "remember")
+            self.assertEqual(
+                result["response"],
+                "I'll remember that your girlfriend is Dunja.",
+            )
+            self.assertEqual(
+                memory.recall("relationship.girlfriend").value,
+                "Dunja",
+            )
+            self.assertEqual(llm.calls, [])
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()

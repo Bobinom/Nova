@@ -175,6 +175,20 @@ class MemoryEngine:
             return f"I'll remember that you live in {record.value}."
         if record.key == "user.birthday":
             return f"I'll remember that your birthday is {record.value}."
+        if record.key.startswith("relationship."):
+            role = record.key.split(".", maxsplit=1)[1]
+            return f"I'll remember that your {role} is {record.value}."
+        if record.key.startswith("pet."):
+            pet = record.key.split(".", maxsplit=1)[1]
+            return f"I'll remember that your {pet} is {record.value}."
+        if record.key == "work.employer":
+            return f"I'll remember that you work at {record.value}."
+        if record.key == "project.current":
+            return f"I'll remember that your current project is {record.value}."
+        if record.key == "goal.primary":
+            return f"I'll remember that your goal is to {record.value}."
+        if record.key == "user.preference":
+            return f"I'll remember that you prefer {record.value}."
         return "I've saved that."
 
     @staticmethod

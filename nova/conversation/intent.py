@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from nova.memory.parser import extract_fact
+
 
 @dataclass(frozen=True)
 class Intent:
@@ -71,6 +73,15 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
             "user.liked_colors",
             _normalize_color_value(like_match.group(1)),
             "preference",
+        )
+
+    fact = extract_fact(raw)
+    if fact is not None:
+        return Intent(
+            "remember",
+            fact.key,
+            fact.value,
+            fact.category,
         )
 
     recall_map = {

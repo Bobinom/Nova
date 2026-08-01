@@ -316,4 +316,24 @@ class ConversationManager:
         if key == "user.birthday":
             return f"I'll remember that your birthday is {value}."
 
+        if key.startswith("relationship."):
+            role = key.split(".", maxsplit=1)[1]
+            return f"I'll remember that your {role} is {value}."
+
+        if key.startswith("pet."):
+            pet = key.split(".", maxsplit=1)[1]
+            return f"I'll remember that your {pet} is {value}."
+
+        if key == "work.employer":
+            return f"I'll remember that you work at {value}."
+
+        if key == "project.current":
+            return f"I'll remember that your current project is {value}."
+
+        if key == "goal.primary":
+            return f"I'll remember that your goal is to {value}."
+
+        if key == "user.preference":
+            return f"I'll remember that you prefer {value}."
+
         return "I've saved that."
