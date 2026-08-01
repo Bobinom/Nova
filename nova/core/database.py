@@ -8,10 +8,10 @@ from typing import Any
 
 
 class DatabaseManager:
-    CURRENT_SCHEMA_VERSION = 2
+    CURRENT_SCHEMA_VERSION = 3
     EXPECTED_TABLES = {
         "app_state", "conversation_episodes", "conversation_sessions",
-        "conversation_turns", "memories", "nova_schema",
+        "conversation_turns", "memories", "memory_archive", "nova_schema",
     }
     MIGRATIONS = {
         1: (
@@ -50,6 +50,14 @@ class DatabaseManager:
             started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             ended_at TEXT
+        )""",),
+        3: ("""CREATE TABLE IF NOT EXISTS memory_archive (
+            memory_key TEXT PRIMARY KEY, category TEXT NOT NULL,
+            value_json TEXT NOT NULL, confidence REAL NOT NULL,
+            source TEXT NOT NULL, created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            archive_reason TEXT NOT NULL
         )""",),
     }
 

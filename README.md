@@ -1,4 +1,4 @@
-# Nova 5.4
+# Nova 5.5
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -9,6 +9,8 @@ episodic memory.
 - Structured Ollama chat with recent conversation history
 - Deterministic exact-key recall for known facts
 - Natural-language semantic memory search
+- Explainable relevance scores with stronger weak-match filtering
+- Reversible low-confidence memory archiving and duplicate consolidation
 - Explicit fact learning for identity, relationships, pets, work, projects,
   goals, and preferences
 - Natural-language memory updates and forgetting
@@ -104,6 +106,10 @@ Continue our PC upgrade discussion.
 | `status` | Show Nova status and stored-item counts |
 | `memory` or `memories` | Inspect semantic memories |
 | `memory <category>` | Filter semantic memories by category |
+| `memory-explain <query>` | Show why semantic memories match a query |
+| `memory-maintain [minimum-confidence]` | Consolidate lists and archive weaker memories |
+| `archived-memories` | Inspect reversible archived memories |
+| `restore-memory <memory-key>` | Restore one archived semantic memory |
 | `forget <memory-key>` | Delete one exact semantic-memory key |
 | `history` | Show recent conversation turns |
 | `clear-history` | Delete conversation turns |
@@ -138,6 +144,8 @@ Continue our PC upgrade discussion.
 - Episodic memory skips trivial greetings, failed Ollama responses, and requests
   containing common secret-related terms such as passwords or API keys.
 - Only relevant memories and past discussions are added to an Ollama prompt.
+- At most three strongly matching semantic memories are added to each prompt.
+- Maintenance archives low-confidence memories instead of deleting them.
 - Use the memory and episode commands to inspect or delete stored information.
 - Privacy settings persist in `~/.nova4/settings.json`.
 - Protected mode (`memory-confirm on`) asks before saving supported semantic facts.
@@ -163,5 +171,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 5.4 keeps the existing SQLite tables and adds its memory structures without
+Nova 5.5 keeps the existing SQLite tables and adds a reversible memory archive without
 requiring users to delete earlier Nova data.

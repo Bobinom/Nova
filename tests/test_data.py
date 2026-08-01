@@ -106,6 +106,13 @@ class DataManagerTests(unittest.TestCase):
             app = NovaApplication(base_dir=root)
             app.start()
             app.memory.remember("user.location", "Malmö", category="identity")
+            app.memory.remember(
+                "inference.favorite_drink",
+                "Coffee",
+                confidence=0.25,
+                source="inferred",
+            )
+            app.memory.maintain()
             app.conversation.repository.add_episode(
                 topic="Nova testing",
                 summary="Test episode",
@@ -120,9 +127,15 @@ class DataManagerTests(unittest.TestCase):
 
             payload = json.loads(exported.read_text(encoding="utf-8"))
             self.assertEqual(audit["semantic_memories"], 1)
+            self.assertEqual(audit["archived_semantic_memories"], 1)
             self.assertEqual(audit["conversation_episodes"], 1)
             self.assertEqual(payload["format"], "nova-memory-export")
+            self.assertEqual(payload["format_version"], 2)
             self.assertEqual(payload["semantic_memories"][0]["value"], "Malmö")
+            self.assertEqual(
+                payload["archived_semantic_memories"][0]["value"],
+                "Coffee",
+            )
             DataManager(root / "nova.db", root).validate_backup(backup)
 
     def test_failed_application_restore_restarts_nova(self):

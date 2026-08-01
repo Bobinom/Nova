@@ -448,23 +448,15 @@ class ConversationManager:
 
     def _forget_memory(self, intent: Intent) -> bool:
         if intent.category:
-            records = self.memory.list_memories(intent.category)
-            for record in records:
-                self.memory.forget(record.key)
-            return bool(records)
+            return self.memory.forget_category(intent.category) > 0
 
-        record = self.memory.recall(intent.memory_key)
-        if record is None:
-            return False
-        if intent.value is not None and not self.memory.matches_value(
-            record.value,
-            str(intent.value),
-        ):
-            return False
-        return self.memory.forget(intent.memory_key)
+        return self.memory.forget_matching(
+            intent.memory_key,
+            str(intent.value) if intent.value is not None else None,
+        )
 
     def _memory_context(self, query: str) -> str:
-        memories = self.memory.search(query)
+        memories = self.memory.search(query, limit=3)
 
         if not memories:
             return ""
