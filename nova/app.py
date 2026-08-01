@@ -10,6 +10,7 @@ from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
 from nova.core.events import EventBus
 from nova.core.data import DataManager
+from nova.core.database import DatabaseManager
 from nova.core.logging import configure_logging
 from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
@@ -28,6 +29,8 @@ class NovaStatus:
     memories: int
     conversation_turns: int
     conversation_episodes: int
+    database_status: str = "unknown"
+    schema_version: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +40,8 @@ class NovaStatus:
             "memories": self.memories,
             "conversation_turns": self.conversation_turns,
             "conversation_episodes": self.conversation_episodes,
+            "database_status": self.database_status,
+            "schema_version": self.schema_version,
         }
 
 
@@ -47,6 +52,7 @@ class NovaApplication:
         self.settings = SettingsManager(self.paths.settings_file)
         self.state = StateStore(self.paths.database_file)
         self.data = DataManager(self.paths.database_file, self.paths.data_dir)
+        self.database = DatabaseManager(self.paths.database_file, self.paths.data_dir)
 
         self.events = EventBus(
             logger=self.logger,
@@ -86,6 +92,7 @@ class NovaApplication:
         self.logger.info("Starting Nova Core")
 
         self.settings.load()
+        self.database.prepare()
         self.state.initialize()
         self.memory.initialize()
         self.conversation.initialize()
@@ -124,6 +131,7 @@ class NovaApplication:
         self.logger.info("Nova Core stopped")
 
     def status(self) -> dict[str, Any]:
+        health = self.database.health()
         return NovaStatus(
             version=__version__,
             running=self._running,
@@ -131,10 +139,18 @@ class NovaApplication:
             memories=len(self.memory.list_memories()),
             conversation_turns=len(self.conversation.history(1000)),
             conversation_episodes=len(self.conversation.episodes(1000)),
+            database_status=str(health["status"]),
+            schema_version=int(health["schema_version"]),
         ).as_dict()
 
     def handle_message(self, text: str) -> dict[str, Any]:
         return self.conversation.handle(text)
+
+    def database_health(self) -> dict[str, Any]:
+        return self.database.health()
+
+    def database_recoveries(self) -> list[str]:
+        return [str(path) for path in self.database.recoveries()]
 
     def privacy_audit(self) -> dict[str, Any]:
         memories = self.memory.list_memories()

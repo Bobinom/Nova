@@ -1,4 +1,4 @@
-# Nova 5.3
+# Nova 5.4
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -18,6 +18,7 @@ episodic memory.
 - Persistent episode auto-save, confirmation, and retention controls
 - Privacy audit, JSON memory export, and verified backup/restore
 - Persistent multi-topic conversation sessions with compact summaries
+- Versioned database migrations, startup integrity checks, and corruption quarantine
 - Persistent local SQLite storage
 
 ## Requirements
@@ -125,6 +126,8 @@ Continue our PC upgrade discussion.
 | `session-summary` | Summarize the current meaningful session |
 | `delete-session <id>` | Delete one session summary |
 | `clear-sessions` | Delete all session summaries |
+| `health` | Show database integrity and schema health |
+| `recoveries` | List quarantined corrupted database files |
 | `quit` | Stop Nova safely |
 
 ## Privacy
@@ -141,6 +144,8 @@ Continue our PC upgrade discussion.
 - JSON exports omit raw conversation history but include semantic memories and episodes.
 - Restore validates SQLite integrity and required Nova tables before replacing data.
 - Every restore first creates a timestamped recovery backup of the current database.
+- Startup checks database integrity before opening long-lived connections.
+- Corrupted databases are preserved under `~/.nova4/recoveries/` before Nova creates a healthy replacement.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -158,5 +163,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 5.3 keeps the existing SQLite tables and adds its memory structures without
+Nova 5.4 keeps the existing SQLite tables and adds its memory structures without
 requiring users to delete earlier Nova data.
