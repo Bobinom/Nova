@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from nova import __version__
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
 from nova.core.events import EventBus
+from nova.core.data import DataManager
 from nova.core.logging import configure_logging
 from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
@@ -38,11 +41,12 @@ class NovaStatus:
 
 
 class NovaApplication:
-    def __init__(self) -> None:
-        self.paths = NovaPaths.create()
+    def __init__(self, base_dir: Path | None = None) -> None:
+        self.paths = NovaPaths.create(base_dir)
         self.logger = configure_logging(self.paths.logs_dir)
         self.settings = SettingsManager(self.paths.settings_file)
         self.state = StateStore(self.paths.database_file)
+        self.data = DataManager(self.paths.database_file, self.paths.data_dir)
 
         self.events = EventBus(
             logger=self.logger,
@@ -131,3 +135,46 @@ class NovaApplication:
 
     def handle_message(self, text: str) -> dict[str, Any]:
         return self.conversation.handle(text)
+
+    def privacy_audit(self) -> dict[str, Any]:
+        memories = self.memory.list_memories()
+        categories: dict[str, int] = {}
+        for memory in memories:
+            categories[memory.category] = categories.get(memory.category, 0) + 1
+        return {
+            "database": str(self.paths.database_file),
+            "database_bytes": self.paths.database_file.stat().st_size,
+            "semantic_memories": len(memories),
+            "memory_categories": categories,
+            "conversation_turns": len(self.conversation.history(1000)),
+            "conversation_episodes": len(self.conversation.episodes(1000)),
+            "privacy": self.conversation.privacy_status(),
+        }
+
+    def export_memory(self, destination: Path | None = None) -> Path:
+        payload = {
+            "format": "nova-memory-export",
+            "format_version": 1,
+            "nova_version": __version__,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "audit": self.privacy_audit(),
+            "semantic_memories": [
+                memory.as_dict()
+                for memory in self.memory.list_memories()
+            ],
+            "conversation_episodes": self.conversation.episodes(1000),
+        }
+        return self.data.export_json(payload, destination)
+
+    def backup_data(self, destination: Path | None = None) -> Path:
+        return self.data.backup(destination)
+
+    def restore_data(self, backup_path: Path) -> Path:
+        was_running = self._running
+        if was_running:
+            self.stop()
+        try:
+            return self.data.restore(backup_path)
+        finally:
+            if was_running:
+                self.start()

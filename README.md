@@ -1,4 +1,4 @@
-# Nova 5.1
+# Nova 5.2
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -16,6 +16,7 @@ episodic memory.
 - Relevant-only memory injection into Ollama prompts
 - Episode filtering for failures, sensitive requests, and duplicate discussions
 - Persistent episode auto-save, confirmation, and retention controls
+- Privacy audit, JSON memory export, and verified backup/restore
 - Persistent local SQLite storage
 
 ## Requirements
@@ -115,6 +116,10 @@ Continue our PC upgrade discussion.
 | `remember-conversation` | Manually save the previous conversation |
 | `dont-save-conversation` | Remove the most recently saved conversation |
 | `forget-last-conversation` | Forget the most recent episode |
+| `privacy-audit` | Summarize locally stored memory and privacy settings |
+| `export-memory [path]` | Export readable semantic and episodic memory JSON |
+| `backup [path]` | Create and verify a consistent SQLite backup |
+| `restore <backup-path>` | Restore after typed confirmation and create a recovery backup |
 | `quit` | Stop Nova safely |
 
 ## Privacy
@@ -128,6 +133,9 @@ Continue our PC upgrade discussion.
 - Use the memory and episode commands to inspect or delete stored information.
 - Privacy settings persist in `~/.nova4/settings.json`.
 - Protected mode (`memory-confirm on`) asks before saving supported semantic facts.
+- JSON exports omit raw conversation history but include semantic memories and episodes.
+- Restore validates SQLite integrity and required Nova tables before replacing data.
+- Every restore first creates a timestamped recovery backup of the current database.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -145,5 +153,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 5.1 keeps the existing SQLite tables and adds its memory structures without
+Nova 5.2 keeps the existing SQLite tables and adds its memory structures without
 requiring users to delete earlier Nova data.

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from nova import __version__
 from nova.app import NovaApplication
 
@@ -82,6 +84,10 @@ def main() -> None:
     print("  remember-conversation")
     print("  dont-save-conversation")
     print("  forget-last-conversation")
+    print("  privacy-audit")
+    print("  export-memory [path]")
+    print("  backup [path]")
+    print("  restore <backup-path>")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -141,6 +147,52 @@ def main() -> None:
 
             if raw == "privacy-status":
                 print(app.conversation.privacy_status())
+                continue
+
+            if raw == "privacy-audit":
+                print(app.privacy_audit())
+                continue
+
+            if raw == "export-memory" or raw.startswith("export-memory "):
+                value = raw[len("export-memory"):].strip()
+                destination = Path(value) if value else None
+                try:
+                    exported = app.export_memory(destination)
+                except (OSError, ValueError) as exc:
+                    print(f"Export failed: {exc}")
+                else:
+                    print(f"Memory export created: {exported}")
+                continue
+
+            if raw == "backup" or raw.startswith("backup "):
+                value = raw[len("backup"):].strip()
+                destination = Path(value) if value else None
+                try:
+                    backup = app.backup_data(destination)
+                except (OSError, ValueError) as exc:
+                    print(f"Backup failed: {exc}")
+                else:
+                    print(f"Verified backup created: {backup}")
+                continue
+
+            if raw.startswith("restore "):
+                backup_path = Path(raw[len("restore "):].strip())
+                confirmation = input(
+                    "Restore this backup and replace current Nova data? "
+                    "Type RESTORE to continue: "
+                )
+                if confirmation != "RESTORE":
+                    print("Restore cancelled.")
+                    continue
+                try:
+                    recovery = app.restore_data(backup_path)
+                except (OSError, ValueError) as exc:
+                    print(f"Restore failed: {exc}")
+                else:
+                    print(
+                        "Restore completed. Pre-restore recovery backup: "
+                        f"{recovery}"
+                    )
                 continue
 
             if raw.startswith("memory-auto "):
