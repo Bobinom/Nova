@@ -74,6 +74,14 @@ def main() -> None:
     print("  episodes")
     print("  delete-episode <id>")
     print("  clear-episodes")
+    print("  privacy-status")
+    print("  memory-auto <on|off>")
+    print("  memory-confirm <on|off>")
+    print("  memory-retention <count>")
+    print("  memory-retention-days <days>")
+    print("  remember-conversation")
+    print("  dont-save-conversation")
+    print("  forget-last-conversation")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -129,6 +137,64 @@ def main() -> None:
             if raw == "clear-episodes":
                 app.conversation.clear_episodes()
                 print("Conversation episodes cleared.")
+                continue
+
+            if raw == "privacy-status":
+                print(app.conversation.privacy_status())
+                continue
+
+            if raw.startswith("memory-auto "):
+                value = raw[12:].strip().lower()
+                if value not in {"on", "off"}:
+                    print("Use: memory-auto <on|off>")
+                else:
+                    app.conversation.set_episode_auto_save(value == "on")
+                    print(f"Episode auto-save {value}.")
+                continue
+
+            if raw.startswith("memory-confirm "):
+                value = raw[15:].strip().lower()
+                if value not in {"on", "off"}:
+                    print("Use: memory-confirm <on|off>")
+                else:
+                    app.conversation.set_semantic_confirmation(value == "on")
+                    print(f"Semantic memory confirmation {value}.")
+                continue
+
+            if raw.startswith("memory-retention-days "):
+                value = raw[22:].strip()
+                if not value.isdigit():
+                    print("Use: memory-retention-days <days>")
+                else:
+                    deleted = app.conversation.set_episode_retention(
+                        retention_days=int(value),
+                    )
+                    print(f"Retention updated; {deleted} episode(s) removed.")
+                continue
+
+            if raw.startswith("memory-retention "):
+                value = raw[17:].strip()
+                if not value.isdigit():
+                    print("Use: memory-retention <count>")
+                else:
+                    deleted = app.conversation.set_episode_retention(
+                        max_episodes=int(value),
+                    )
+                    print(f"Retention updated; {deleted} episode(s) removed.")
+                continue
+
+            if raw in {
+                "remember-conversation",
+                "dont-save-conversation",
+                "forget-last-conversation",
+            }:
+                phrases = {
+                    "remember-conversation": "Remember this conversation",
+                    "dont-save-conversation": "Don't save this conversation",
+                    "forget-last-conversation": "Forget our last conversation",
+                }
+                result = app.handle_message(phrases[raw])
+                print(f"Nova: {result['response']}")
                 continue
 
             if raw.startswith("forget "):

@@ -1,4 +1,4 @@
-# Nova 5.0
+# Nova 5.1
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -15,6 +15,7 @@ episodic memory.
 - Timestamped episodic memory for past discussions
 - Relevant-only memory injection into Ollama prompts
 - Episode filtering for failures, sensitive requests, and duplicate discussions
+- Persistent episode auto-save, confirmation, and retention controls
 - Persistent local SQLite storage
 
 ## Requirements
@@ -106,6 +107,14 @@ Continue our PC upgrade discussion.
 | `episodes` | Inspect saved conversation episodes |
 | `delete-episode <id>` | Delete one episode |
 | `clear-episodes` | Delete all episodes |
+| `privacy-status` | Show persistent memory privacy settings |
+| `memory-auto <on\|off>` | Enable or disable automatic episode saving |
+| `memory-confirm <on\|off>` | Require confirmation before saving facts |
+| `memory-retention <count>` | Limit stored episodes by count; `0` is unlimited |
+| `memory-retention-days <days>` | Delete older episodes; `0` disables age expiry |
+| `remember-conversation` | Manually save the previous conversation |
+| `dont-save-conversation` | Remove the most recently saved conversation |
+| `forget-last-conversation` | Forget the most recent episode |
 | `quit` | Stop Nova safely |
 
 ## Privacy
@@ -117,6 +126,8 @@ Continue our PC upgrade discussion.
   containing common secret-related terms such as passwords or API keys.
 - Only relevant memories and past discussions are added to an Ollama prompt.
 - Use the memory and episode commands to inspect or delete stored information.
+- Privacy settings persist in `~/.nova4/settings.json`.
+- Protected mode (`memory-confirm on`) asks before saving supported semantic facts.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -134,5 +145,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 5.0 keeps the existing SQLite tables and adds its memory structures without
+Nova 5.1 keeps the existing SQLite tables and adds its memory structures without
 requiring users to delete earlier Nova data.

@@ -2,9 +2,18 @@ import json
 from copy import deepcopy
 from threading import RLock
 
+from nova import __version__
+
 DEFAULT_SETTINGS = {
-    "application": {"name": "Nova", "version": "4.0.0-alpha.1"},
-    "privacy": {"allow_web_access": False, "allow_telemetry": False},
+    "application": {"name": "Nova", "version": __version__},
+    "privacy": {
+        "allow_web_access": False,
+        "allow_telemetry": False,
+        "episode_auto_save": True,
+        "confirm_semantic_memory": False,
+        "max_episodes": 200,
+        "retention_days": 0,
+    },
     "plugins": {"enabled": True}
 }
 
