@@ -64,6 +64,58 @@ class MemoryEngineTests(unittest.TestCase):
             self.assertNotIn("Nova", recalled["response"])
             engine.close()
 
+    def test_search_finds_memory_from_natural_language(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "relationship.girlfriend",
+                "Dunja",
+                category="relationship",
+            )
+
+            results = engine.search("What is my partner's name?")
+
+            self.assertEqual([record.key for record in results], [
+                "relationship.girlfriend",
+            ])
+            self.assertEqual(results[0].value, "Dunja")
+            engine.close()
+
+    def test_search_ranks_key_matches_and_respects_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "user.favorite_color",
+                "Amber",
+                category="preference",
+            )
+            engine.remember(
+                "user.liked_colors",
+                ["Purple"],
+                category="preference",
+            )
+            engine.remember("user.location", "Malmö", category="identity")
+
+            results = engine.search("What is my favorite colour?", limit=1)
+
+            self.assertEqual([record.key for record in results], [
+                "user.favorite_color",
+            ])
+            engine.close()
+
+    def test_search_preserves_exact_key_recall(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            stored = engine.remember(
+                "user.location",
+                "Malmö",
+                category="identity",
+            )
+
+            self.assertEqual(engine.recall("user.location"), stored)
+            self.assertEqual(engine.search("user.location"), [stored])
+            engine.close()
+
 
 if __name__ == "__main__":
     unittest.main()

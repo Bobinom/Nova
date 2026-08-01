@@ -34,28 +34,39 @@ class ConversationManager:
 
     def handle(self, text: str) -> dict[str, Any]:
         text = text.strip()
+
         if not text:
-            return {"handled": True, "response": "Please say something."}
+            return {
+                "handled": True,
+                "response": "Please say something.",
+            }
 
         self.repository.add("user", text)
 
         intent = classify(text, self.last_topic)
         result = self._execute(intent, text)
 
-        response = result["response"]
+        response = str(result["response"])
         self.repository.add("assistant", response)
         self.events.emit("assistant.response", result)
 
         return result
 
     def history(self, limit: int = 20) -> list[dict[str, Any]]:
-        return [turn.as_dict() for turn in self.repository.recent(limit)]
+        return [
+            turn.as_dict()
+            for turn in self.repository.recent(limit)
+        ]
 
     def clear_history(self) -> None:
         self.repository.clear()
         self.last_topic = None
 
-    def _execute(self, intent: Intent, text: str) -> dict[str, Any]:
+    def _execute(
+        self,
+        intent: Intent,
+        text: str,
+    ) -> dict[str, Any]:
         if intent.name == "incomplete":
             prompts = {
                 "name": "What would you like me to know about your name?",
@@ -63,6 +74,7 @@ class ConversationManager:
                 "location": "Where do you live?",
                 "birthday": "What is your birthday?",
             }
+
             return {
                 "handled": True,
                 "intent": intent.name,
@@ -78,6 +90,7 @@ class ConversationManager:
                 intent.value,
                 category=intent.category or "general",
             )
+
             self.last_topic = intent.memory_key
 
             return {
@@ -157,24 +170,41 @@ class ConversationManager:
             return {
                 "handled": True,
                 "intent": intent.name,
-                "response": self._recall_response(intent.memory_key),
+                "response": self._recall_response(
+                    intent.memory_key,
+                ),
             }
 
         if self.llm is not None:
             turns = self.repository.recent(11)
-            if turns and turns[-1].role == "user" and turns[-1].text == text:
+
+            if (
+                turns
+                and turns[-1].role == "user"
+                and turns[-1].text == text
+            ):
                 turns = turns[:-1]
+
             turns = turns[-10:]
 
             history = [
-                {"role": turn.role, "content": turn.text}
+                {
+                    "role": turn.role,
+                    "content": turn.text,
+                }
                 for turn in turns
             ]
+
+            system_prompt = (
+                NOVA_SYSTEM_PROMPT
+                + self._memory_context(text)
+            )
+
             return {
                 "handled": True,
                 "intent": "general",
                 "response": self.llm.generate(
-                    system_prompt=NOVA_SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
                     history=history,
                     prompt=text,
                 ),
@@ -189,10 +219,31 @@ class ConversationManager:
             ),
         }
 
+    def _memory_context(self, query: str) -> str:
+        memories = self.memory.search(query)
+
+        if not memories:
+            return ""
+
+        lines = [
+            f"- {record.key}: {record.value}"
+            for record in memories
+        ]
+
+        return (
+            "\n\nKnown user memories:\n"
+            + "\n".join(lines)
+            + "\nUse these memories only when relevant."
+        )
+
     def _recall_response(self, key: str) -> str:
         if key == "user.color_preferences":
-            favorite = self.memory.recall("user.favorite_color")
-            liked = self.memory.recall("user.liked_colors")
+            favorite = self.memory.recall(
+                "user.favorite_color"
+            )
+            liked = self.memory.recall(
+                "user.liked_colors"
+            )
 
             if not favorite and not liked:
                 return "I don't know which colors you like yet."
@@ -204,7 +255,11 @@ class ConversationManager:
                     f"Your favorite color is {favorite.value}."
                 )
 
-            if liked and isinstance(liked.value, list) and liked.value:
+            if (
+                liked
+                and isinstance(liked.value, list)
+                and liked.value
+            ):
                 sentences.append(
                     f"You also like {', '.join(liked.value)}."
                 )
@@ -237,10 +292,16 @@ class ConversationManager:
             "user.birthday": f"Your birthday is {record.value}.",
         }
 
-        return responses.get(key, str(record.value))
+        return responses.get(
+            key,
+            str(record.value),
+        )
 
     @staticmethod
-    def _remember_response(key: str, value: Any) -> str:
+    def _remember_response(
+        key: str,
+        value: Any,
+    ) -> str:
         if key == "user.name":
             return f"I'll remember that your name is {value}."
 
@@ -248,5 +309,11 @@ class ConversationManager:
             return (
                 f"I'll remember that your favorite color is {value}."
             )
+
+        if key == "user.location":
+            return f"I'll remember that you live in {value}."
+
+        if key == "user.birthday":
+            return f"I'll remember that your birthday is {value}."
 
         return "I've saved that."

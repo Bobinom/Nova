@@ -119,6 +119,28 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_llm_receives_only_relevant_memory_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            memory.remember(
+                "relationship.girlfriend",
+                "Dunja",
+                category="relationship",
+            )
+            memory.remember("user.location", "Malmö", category="identity")
+
+            manager.handle("What is my partner's name?")
+
+            system_prompt, _, _ = llm.calls[-1]
+            self.assertIn("relationship.girlfriend: Dunja", system_prompt)
+            self.assertNotIn("user.location: Malmö", system_prompt)
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()
