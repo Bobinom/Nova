@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from nova import __version__
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
 from nova.core.events import EventBus
@@ -91,7 +92,7 @@ class NovaApplication:
         self.events.emit(
             "nova.started",
             {
-                "version": "4.2.1",
+                "version": __version__,
             },
         )
 
@@ -119,7 +120,7 @@ class NovaApplication:
 
     def status(self) -> dict[str, Any]:
         return NovaStatus(
-            version="4.2.1",
+            version=__version__,
             running=self._running,
             loaded_plugins=self.plugins.loaded_count,
             memories=len(self.memory.list_memories()),

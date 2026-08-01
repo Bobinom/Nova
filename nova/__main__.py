@@ -1,3 +1,4 @@
+from nova import __version__
 from nova.app import NovaApplication
 
 
@@ -61,7 +62,7 @@ def main() -> None:
     app = NovaApplication()
     app.start()
 
-    print("Nova 4.2.1 Conversation Polish is running.")
+    print(f"Nova {__version__} is running.")
     print(f"Data directory: {app.paths.data_dir}")
     print("Commands:")
     print("  status")

@@ -1,3 +1,3 @@
-"""Nova 4 package."""
+"""Nova local AI assistant."""
 
-__version__ = "4.2.1"
+__version__ = "5.0.0"
