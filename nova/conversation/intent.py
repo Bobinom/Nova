@@ -3,6 +3,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from nova.memory.parser import (
+    extract_fact,
+    extract_forget_request,
+    extract_search_query,
+)
+
 
 @dataclass(frozen=True)
 class Intent:
@@ -16,6 +22,37 @@ class Intent:
 def classify(text: str, last_topic: str | None = None) -> Intent:
     raw = text.strip()
     normalized = _normalize(raw)
+
+    episode_continue = re.match(
+        r"^(?:continue|resume)\s+(?:our|the)\s+(.+?)(?:\s+discussion)?$",
+        normalized,
+        re.I,
+    )
+    if episode_continue:
+        return Intent("episode_continue", value=episode_continue.group(1))
+
+    episode_recall = re.match(
+        r"^(?:what did we (?:discuss|talk about|decide)(?: about)?|"
+        r"what were we talking about)(.*)$",
+        normalized,
+        re.I,
+    )
+    if episode_recall:
+        query = episode_recall.group(1).strip() or normalized
+        return Intent("episode_recall", value=query)
+
+    forget = extract_forget_request(raw)
+    if forget is not None:
+        return Intent(
+            "forget",
+            forget.key,
+            forget.expected_value,
+            forget.category,
+        )
+
+    search_query = extract_search_query(raw)
+    if search_query is not None:
+        return Intent("search_memory", value=search_query)
 
     incomplete = {
         "my name": "name",
@@ -71,6 +108,20 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
             "user.liked_colors",
             _normalize_color_value(like_match.group(1)),
             "preference",
+        )
+
+    fact = extract_fact(raw)
+    if fact is not None:
+        action = (
+            "remember_unique"
+            if fact.key.startswith("pet.") or fact.key == "user.preference"
+            else "remember"
+        )
+        return Intent(
+            action,
+            fact.key,
+            fact.value,
+            fact.category,
         )
 
     recall_map = {

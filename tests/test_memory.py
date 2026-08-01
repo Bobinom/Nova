@@ -64,6 +64,137 @@ class MemoryEngineTests(unittest.TestCase):
             self.assertNotIn("Nova", recalled["response"])
             engine.close()
 
+    def test_search_finds_memory_from_natural_language(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "relationship.girlfriend",
+                "Dunja",
+                category="relationship",
+            )
+
+            results = engine.search("What is my partner's name?")
+
+            self.assertEqual([record.key for record in results], [
+                "relationship.girlfriend",
+            ])
+            self.assertEqual(results[0].value, "Dunja")
+            engine.close()
+
+    def test_search_ranks_key_matches_and_respects_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.remember(
+                "user.favorite_color",
+                "Amber",
+                category="preference",
+            )
+            engine.remember(
+                "user.liked_colors",
+                ["Purple"],
+                category="preference",
+            )
+            engine.remember("user.location", "Malmö", category="identity")
+
+            results = engine.search("What is my favorite colour?", limit=1)
+
+            self.assertEqual([record.key for record in results], [
+                "user.favorite_color",
+            ])
+            engine.close()
+
+    def test_search_preserves_exact_key_recall(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            stored = engine.remember(
+                "user.location",
+                "Malmö",
+                category="identity",
+            )
+
+            self.assertEqual(engine.recall("user.location"), stored)
+            self.assertEqual(engine.search("user.location"), [stored])
+            engine.close()
+
+    def test_extracts_semantic_memories(self):
+        cases = [
+            (
+                "My girlfriend's name is Dunja",
+                "relationship.girlfriend",
+                "Dunja",
+            ),
+            ("My dog is Max", "pet.dog", "Max"),
+            ("I work at Espresso House", "work.employer", "Espresso House"),
+            ("I'm working on Nova", "project.current", "Nova"),
+            ("My goal is to build Jarvis", "goal.primary", "build Jarvis"),
+            ("I prefer dark interfaces", "user.preference", "dark interfaces"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+
+            for text, key, value in cases:
+                result = engine.process_text(text)
+                self.assertTrue(result["handled"], text)
+                self.assertEqual(engine.recall(key).value, value)
+
+            engine.close()
+
+    def test_does_not_learn_questions_or_uncertain_facts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+
+            question = engine.process_text("My dog is Max?")
+            uncertainty = engine.process_text("My dog is maybe Max")
+            third_person = engine.process_text("Dunja's dog is Max")
+
+            self.assertFalse(question["handled"])
+            self.assertFalse(uncertainty["handled"])
+            self.assertFalse(third_person["handled"])
+            self.assertEqual(engine.list_memories(), [])
+            engine.close()
+
+    def test_event_path_updates_and_forgets_matching_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("I work at Espresso House")
+            engine.process_text("Actually, I work at IKEA now")
+
+            self.assertEqual(engine.recall("work.employer").value, "IKEA")
+
+            result = engine.process_text("I no longer work at IKEA")
+
+            self.assertTrue(result["deleted"])
+            self.assertIsNone(engine.recall("work.employer"))
+            engine.close()
+
+    def test_natural_location_forget(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("I live in Malmö")
+
+            result = engine.process_text("Forget where I live")
+
+            self.assertTrue(result["deleted"])
+            self.assertIsNone(engine.recall("user.location"))
+            engine.close()
+
+    def test_repeated_pet_and_preference_facts_remain_unique(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = self.make_engine(Path(directory) / "nova.db")
+            engine.process_text("My dog is Max")
+            engine.process_text("My dog is Rex")
+            engine.process_text("My dog is Max")
+            engine.process_text("I prefer dark interfaces")
+            engine.process_text("I prefer concise answers")
+
+            self.assertEqual(engine.recall("pet.dog").value, ["Max", "Rex"])
+            self.assertEqual(
+                engine.recall("user.preference").value,
+                ["dark interfaces", "concise answers"],
+            )
+            engine.close()
+
 
 if __name__ == "__main__":
     unittest.main()
