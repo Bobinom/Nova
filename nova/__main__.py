@@ -105,6 +105,8 @@ def main() -> None:
     print("  session-summary")
     print("  delete-session <id>")
     print("  clear-sessions")
+    print("  health")
+    print("  recoveries")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -120,6 +122,19 @@ def main() -> None:
 
             if raw == "status":
                 print(app.status())
+                continue
+
+            if raw == "health":
+                print(app.database_health())
+                continue
+
+            if raw == "recoveries":
+                recoveries = app.database_recoveries()
+                if recoveries:
+                    for recovery in recoveries:
+                        print(recovery)
+                else:
+                    print("No quarantined databases.")
                 continue
 
             if raw in {"memory", "memories"}:
