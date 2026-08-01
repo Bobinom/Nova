@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from nova import __version__
+from nova.actions.service import ActionService
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
 from nova.core.events import EventBus
@@ -19,6 +20,7 @@ from nova.llm.ollama import OllamaService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 from nova.plugins.manager import PluginManager
+from nova.voice.service import VoiceService
 
 
 @dataclass
@@ -31,6 +33,8 @@ class NovaStatus:
     conversation_episodes: int
     database_status: str = "unknown"
     schema_version: int = 0
+    voice_enabled: bool = False
+    actions_enabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +46,8 @@ class NovaStatus:
             "conversation_episodes": self.conversation_episodes,
             "database_status": self.database_status,
             "schema_version": self.schema_version,
+            "voice_enabled": self.voice_enabled,
+            "actions_enabled": self.actions_enabled,
         }
 
 
@@ -53,6 +59,8 @@ class NovaApplication:
         self.state = StateStore(self.paths.database_file)
         self.data = DataManager(self.paths.database_file, self.paths.data_dir)
         self.database = DatabaseManager(self.paths.database_file, self.paths.data_dir)
+        self.actions = ActionService(self.settings)
+        self.voice = VoiceService(self.settings)
 
         self.events = EventBus(
             logger=self.logger,
@@ -81,6 +89,7 @@ class NovaApplication:
             logger=self.logger.getChild("conversation"),
             llm=self.llm,
             settings=self.settings,
+            actions=self.actions,
         )
 
         self._running = False
@@ -122,6 +131,7 @@ class NovaApplication:
         )
 
         self.plugins.stop_all()
+        self.actions.cancel_pending()
         self.conversation.close()
         self.memory.close()
         self.state.close()
@@ -141,10 +151,22 @@ class NovaApplication:
             conversation_episodes=len(self.conversation.episodes(1000)),
             database_status=str(health["status"]),
             schema_version=int(health["schema_version"]),
+            voice_enabled=bool(self.voice.status()["enabled"]),
+            actions_enabled=bool(self.actions.status()["enabled"]),
         ).as_dict()
 
     def handle_message(self, text: str) -> dict[str, Any]:
-        return self.conversation.handle(text)
+        result = self.conversation.handle(text)
+        try:
+            self.voice.speak_response(str(result["response"]))
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.logger.warning("Voice output failed: %s", exc)
+        return result
+
+    def listen_and_respond(self) -> dict[str, Any]:
+        transcript = self.voice.listen()
+        result = self.handle_message(transcript)
+        return {"transcript": transcript, **result}
 
     def database_health(self) -> dict[str, Any]:
         return self.database.health()
