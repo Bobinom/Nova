@@ -23,6 +23,24 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
     raw = text.strip()
     normalized = _normalize(raw)
 
+    episode_continue = re.match(
+        r"^(?:continue|resume)\s+(?:our|the)\s+(.+?)(?:\s+discussion)?$",
+        normalized,
+        re.I,
+    )
+    if episode_continue:
+        return Intent("episode_continue", value=episode_continue.group(1))
+
+    episode_recall = re.match(
+        r"^(?:what did we (?:discuss|talk about|decide)(?: about)?|"
+        r"what were we talking about)(.*)$",
+        normalized,
+        re.I,
+    )
+    if episode_recall:
+        query = episode_recall.group(1).strip() or normalized
+        return Intent("episode_recall", value=query)
+
     forget = extract_forget_request(raw)
     if forget is not None:
         return Intent(

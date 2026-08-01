@@ -222,6 +222,141 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_general_conversation_creates_episode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("Let's plan a Ryzen PC upgrade")
+
+            episodes = manager.episodes()
+            self.assertEqual(len(episodes), 1)
+            self.assertIn("Ryzen PC upgrade", episodes[0]["user_text"])
+            self.assertEqual(episodes[0]["assistant_text"], "LLM response")
+            manager.close()
+            memory.close()
+
+    def test_trivial_greeting_does_not_create_episode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("Hello")
+
+            self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_sensitive_request_does_not_create_episode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("My password is swordfish, please remember it")
+
+            self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_episode_recall_is_deterministic_and_skips_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Let's plan a Ryzen PC upgrade")
+            calls_before_recall = len(llm.calls)
+
+            result = manager.handle(
+                "What did we discuss about upgrading my PC?"
+            )
+
+            self.assertEqual(result["intent"], "episode_recall")
+            self.assertIn("Ryzen PC upgrade", result["response"])
+            self.assertEqual(len(llm.calls), calls_before_recall)
+            manager.close()
+            memory.close()
+
+    def test_episode_recall_supports_today_filter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Let's plan the Nova plugin architecture")
+
+            result = manager.handle("What did we discuss today?")
+
+            self.assertIn("Nova plugin architecture", result["response"])
+            manager.close()
+            memory.close()
+
+    def test_episode_persists_and_is_injected_when_relevant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "nova.db"
+            first_llm = RecordingLLM()
+            manager, memory = self.make_manager(database, llm=first_llm)
+            manager.handle("Let's plan a Ryzen PC upgrade")
+            manager.close()
+            memory.close()
+
+            second_llm = RecordingLLM()
+            manager2, memory2 = self.make_manager(database, llm=second_llm)
+            manager2.handle("Which GPU suits the PC upgrade?")
+
+            system_prompt, _, _ = second_llm.calls[-1]
+            self.assertIn("Relevant past conversations", system_prompt)
+            self.assertIn("Ryzen PC upgrade", system_prompt)
+            manager2.close()
+            memory2.close()
+
+    def test_continue_episode_uses_llm_with_past_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Let's plan a Ryzen PC upgrade")
+
+            result = manager.handle("Continue our PC upgrade discussion")
+
+            self.assertEqual(result["intent"], "episode_continue")
+            system_prompt, _, _ = llm.calls[-1]
+            self.assertIn("Relevant past conversations", system_prompt)
+            self.assertIn("Ryzen PC upgrade", system_prompt)
+            manager.close()
+            memory.close()
+
+    def test_episode_inspect_delete_and_clear(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            manager.handle("Plan the Nova memory architecture")
+            manager.handle("Compare options for a gaming monitor")
+            episodes = manager.episodes()
+
+            self.assertTrue(manager.delete_episode(episodes[0]["id"]))
+            self.assertEqual(len(manager.episodes()), 1)
+            manager.clear_episodes()
+            self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()

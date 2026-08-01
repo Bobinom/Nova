@@ -23,6 +23,7 @@ class NovaStatus:
     loaded_plugins: int
     memories: int
     conversation_turns: int
+    conversation_episodes: int
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -31,6 +32,7 @@ class NovaStatus:
             "loaded_plugins": self.loaded_plugins,
             "memories": self.memories,
             "conversation_turns": self.conversation_turns,
+            "conversation_episodes": self.conversation_episodes,
         }
 
 
@@ -122,6 +124,7 @@ class NovaApplication:
             loaded_plugins=self.plugins.loaded_count,
             memories=len(self.memory.list_memories()),
             conversation_turns=len(self.conversation.history(1000)),
+            conversation_episodes=len(self.conversation.episodes(1000)),
         ).as_dict()
 
     def handle_message(self, text: str) -> dict[str, Any]:

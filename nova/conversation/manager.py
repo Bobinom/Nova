@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from nova.conversation.intent import Intent, classify
+from nova.conversation.models import ConversationEpisode
 from nova.conversation.repository import ConversationRepository
 from nova.llm.prompts import NOVA_SYSTEM_PROMPT
 from nova.llm.service import LLMService
@@ -10,6 +13,23 @@ from nova.memory.engine import MemoryEngine
 
 
 class ConversationManager:
+    _EPISODE_STOP_WORDS = {
+        "a", "about", "and", "are", "continue", "did", "discuss",
+        "discussion", "do", "for", "i", "in", "is", "it", "last",
+        "me", "my", "of", "on", "our", "resume", "talk", "the",
+        "this", "to", "today", "we", "week", "what", "yesterday",
+        "you",
+    }
+
+    _TRIVIAL_EPISODE_TEXT = {
+        "good morning", "good night", "hello", "hey", "hi", "thanks",
+        "thank you",
+    }
+
+    _SENSITIVE_EPISODE_TERMS = {
+        "api key", "bank account", "credit card", "password", "passcode",
+        "private key", "secret key", "security number", "social security",
+    }
     def __init__(
         self,
         *,
@@ -46,8 +66,12 @@ class ConversationManager:
         intent = classify(text, self.last_topic)
         result = self._execute(intent, text)
 
+        record_episode = bool(result.pop("_record_episode", False))
+
         response = str(result["response"])
         self.repository.add("assistant", response)
+        if record_episode:
+            self._record_episode(text, response)
         self.events.emit("assistant.response", result)
 
         return result
@@ -61,6 +85,18 @@ class ConversationManager:
     def clear_history(self) -> None:
         self.repository.clear()
         self.last_topic = None
+
+    def episodes(self, limit: int = 20) -> list[dict[str, Any]]:
+        return [
+            episode.as_dict()
+            for episode in self.repository.list_episodes(limit)
+        ]
+
+    def delete_episode(self, episode_id: int) -> bool:
+        return self.repository.delete_episode(episode_id)
+
+    def clear_episodes(self) -> None:
+        self.repository.clear_episodes()
 
     def _execute(
         self,
@@ -133,6 +169,38 @@ class ConversationManager:
                 "handled": True,
                 "intent": intent.name,
                 "response": self.memory.search_response(records),
+            }
+
+        if intent.name == "episode_recall":
+            episodes = self._search_episodes(str(intent.value))
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": self._episode_recall_response(episodes),
+            }
+
+        if intent.name == "episode_continue":
+            episodes = self._search_episodes(str(intent.value))
+            if not episodes:
+                return {
+                    "handled": True,
+                    "intent": intent.name,
+                    "response": "I couldn't find a related past discussion.",
+                }
+            if self.llm is None:
+                return {
+                    "handled": True,
+                    "intent": intent.name,
+                    "response": self._episode_recall_response(episodes),
+                }
+            return {
+                "handled": True,
+                "intent": intent.name,
+                "response": self._generate_llm_response(
+                    text,
+                    episode_context=self._episode_context(episodes),
+                ),
+                "_record_episode": True,
             }
 
         if intent.name == "remember_color_bundle":
@@ -209,38 +277,11 @@ class ConversationManager:
             }
 
         if self.llm is not None:
-            turns = self.repository.recent(11)
-
-            if (
-                turns
-                and turns[-1].role == "user"
-                and turns[-1].text == text
-            ):
-                turns = turns[:-1]
-
-            turns = turns[-10:]
-
-            history = [
-                {
-                    "role": turn.role,
-                    "content": turn.text,
-                }
-                for turn in turns
-            ]
-
-            system_prompt = (
-                NOVA_SYSTEM_PROMPT
-                + self._memory_context(text)
-            )
-
             return {
                 "handled": True,
                 "intent": "general",
-                "response": self.llm.generate(
-                    system_prompt=system_prompt,
-                    history=history,
-                    prompt=text,
-                ),
+                "response": self._generate_llm_response(text),
+                "_record_episode": True,
             }
 
         return {
@@ -285,6 +326,133 @@ class ConversationManager:
             + "\n".join(lines)
             + "\nUse these memories only when relevant."
         )
+
+    def _generate_llm_response(
+        self,
+        text: str,
+        *,
+        episode_context: str | None = None,
+    ) -> str:
+        turns = self.repository.recent(11)
+        if turns and turns[-1].role == "user" and turns[-1].text == text:
+            turns = turns[:-1]
+        history = [
+            {"role": turn.role, "content": turn.text}
+            for turn in turns[-10:]
+        ]
+        context = episode_context
+        if context is None:
+            context = self._episode_context(self._search_episodes(text))
+        return self.llm.generate(
+            system_prompt=(
+                NOVA_SYSTEM_PROMPT
+                + self._memory_context(text)
+                + context
+            ),
+            history=history,
+            prompt=text,
+        )
+
+    def _record_episode(self, user_text: str, assistant_text: str) -> None:
+        normalized = re.sub(r"[^\w\s]", "", user_text.lower()).strip()
+        if normalized in self._TRIVIAL_EPISODE_TEXT:
+            return
+        if any(term in normalized for term in self._SENSITIVE_EPISODE_TERMS):
+            return
+        terms = self._episode_terms(user_text)
+        if len(normalized.split()) < 3 or not terms:
+            return
+        topic = " ".join(sorted(terms)[:4])
+        user_summary = self._truncate(user_text, 220)
+        assistant_summary = self._truncate(assistant_text, 280)
+        self.repository.add_episode(
+            topic=topic,
+            summary=f"User: {user_summary} Nova: {assistant_summary}",
+            user_text=user_text,
+            assistant_text=assistant_text,
+        )
+
+    def _search_episodes(
+        self,
+        query: str,
+        limit: int = 5,
+    ) -> list[ConversationEpisode]:
+        terms = self._episode_terms(query)
+        ranked: list[tuple[int, int, ConversationEpisode]] = []
+        for episode in self.repository.list_episodes(200):
+            if not self._episode_time_matches(query, episode.created_at):
+                continue
+            topic_terms = self._episode_terms(episode.topic)
+            user_terms = self._episode_terms(episode.user_text)
+            summary_terms = self._episode_terms(episode.summary)
+            score = (
+                5 * len(terms & topic_terms)
+                + 3 * len(terms & user_terms)
+                + 2 * len(terms & summary_terms)
+            )
+            if score or not terms:
+                ranked.append((score, episode.id, episode))
+        ranked.sort(key=lambda item: (-item[0], -item[1]))
+        return [episode for _, _, episode in ranked[:limit]]
+
+    @classmethod
+    def _episode_terms(cls, text: str) -> set[str]:
+        terms: set[str] = set()
+        for raw_term in re.findall(r"[\w]+", text.lower()):
+            if raw_term in cls._EPISODE_STOP_WORDS:
+                continue
+            terms.add(raw_term)
+            if len(raw_term) > 4 and raw_term.endswith("ing"):
+                stem = raw_term[:-3]
+                terms.add(stem)
+                terms.add(stem + "e")
+            elif len(raw_term) > 3 and raw_term.endswith("s"):
+                terms.add(raw_term[:-1])
+        return terms
+
+    @staticmethod
+    def _episode_time_matches(query: str, created_at: str) -> bool:
+        lowered = query.lower()
+        if not any(word in lowered for word in ("today", "yesterday", "last week")):
+            return True
+        created = datetime.fromisoformat(created_at).date()
+        today = datetime.now(timezone.utc).date()
+        if "yesterday" in lowered:
+            return created == today - timedelta(days=1)
+        if "today" in lowered:
+            return created == today
+        return today - timedelta(days=7) <= created <= today
+
+    @staticmethod
+    def _episode_context(episodes: list[ConversationEpisode]) -> str:
+        if not episodes:
+            return ""
+        lines = [
+            f"- [{episode.created_at}] {episode.summary}"
+            for episode in episodes[:3]
+        ]
+        return (
+            "\n\nRelevant past conversations:\n"
+            + "\n".join(lines)
+            + "\nUse these only when relevant; do not invent missing details."
+        )
+
+    @staticmethod
+    def _episode_recall_response(episodes: list[ConversationEpisode]) -> str:
+        if not episodes:
+            return "I couldn't find a related past discussion."
+        details = "\n".join(
+            f"- {episode.created_at}: {episode.summary}"
+            for episode in episodes[:3]
+        )
+        return f"I found these past discussions:\n{details}"
+
+    @staticmethod
+    def _truncate(text: str, limit: int) -> str:
+        cleaned = re.sub(r"\s+", " ", text).strip()
+        if len(cleaned) <= limit:
+            return cleaned
+        return cleaned[: limit - 1].rstrip() + "…"
 
     def _recall_response(self, key: str) -> str:
         if key == "user.color_preferences":

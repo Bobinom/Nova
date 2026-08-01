@@ -45,6 +45,18 @@ def _print_memories(app: NovaApplication, category: str | None = None) -> None:
         print()
 
 
+def _print_episodes(app: NovaApplication) -> None:
+    episodes = app.conversation.episodes()
+    if not episodes:
+        print("No conversation episodes stored.")
+        return
+    for episode in episodes:
+        print(
+            f"[{episode['id']}] {episode['created_at']} "
+            f"({episode['topic']}): {episode['summary']}"
+        )
+
+
 def main() -> None:
     app = NovaApplication()
     app.start()
@@ -58,6 +70,9 @@ def main() -> None:
     print("  memories")
     print("  history")
     print("  clear-history")
+    print("  episodes")
+    print("  delete-episode <id>")
+    print("  clear-episodes")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -95,6 +110,24 @@ def main() -> None:
             if raw == "clear-history":
                 app.conversation.clear_history()
                 print("Conversation history cleared.")
+                continue
+
+            if raw == "episodes":
+                _print_episodes(app)
+                continue
+
+            if raw.startswith("delete-episode "):
+                episode_id = raw[15:].strip()
+                if not episode_id.isdigit():
+                    print("Episode ID must be a number.")
+                else:
+                    deleted = app.conversation.delete_episode(int(episode_id))
+                    print("Episode deleted." if deleted else "Episode not found.")
+                continue
+
+            if raw == "clear-episodes":
+                app.conversation.clear_episodes()
+                print("Conversation episodes cleared.")
                 continue
 
             if raw.startswith("forget "):
