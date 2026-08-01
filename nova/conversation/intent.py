@@ -24,6 +24,14 @@ def classify(text: str, last_topic: str | None = None) -> Intent:
     normalized = _normalize(raw)
 
     if normalized in {
+        "what did we discuss this session",
+        "summarize this session",
+        "summarise this session",
+        "what have we discussed this session",
+    }:
+        return Intent("session_recall")
+
+    if normalized in {
         "remember this conversation",
         "remember our conversation",
         "save this conversation",

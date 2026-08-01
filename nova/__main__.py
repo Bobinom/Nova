@@ -60,6 +60,19 @@ def _print_episodes(app: NovaApplication) -> None:
         )
 
 
+def _print_sessions(app: NovaApplication) -> None:
+    sessions = app.conversation.sessions()
+    if not sessions:
+        print("No conversation sessions stored.")
+        return
+    for session in sessions:
+        status = "active" if session["ended_at"] is None else "ended"
+        print(
+            f"[{session['id']}] {status}, {session['episode_count']} episode(s), "
+            f"{session['topic']}: {session['summary']}"
+        )
+
+
 def main() -> None:
     app = NovaApplication()
     app.start()
@@ -88,6 +101,10 @@ def main() -> None:
     print("  export-memory [path]")
     print("  backup [path]")
     print("  restore <backup-path>")
+    print("  sessions")
+    print("  session-summary")
+    print("  delete-session <id>")
+    print("  clear-sessions")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -129,6 +146,29 @@ def main() -> None:
 
             if raw == "episodes":
                 _print_episodes(app)
+                continue
+
+            if raw == "sessions":
+                _print_sessions(app)
+                continue
+
+            if raw == "session-summary":
+                result = app.handle_message("Summarize this session")
+                print(f"Nova: {result['response']}")
+                continue
+
+            if raw.startswith("delete-session "):
+                session_id = raw[len("delete-session "):].strip()
+                if not session_id.isdigit():
+                    print("Session ID must be a number.")
+                else:
+                    deleted = app.conversation.delete_session(int(session_id))
+                    print("Session deleted." if deleted else "Session not found.")
+                continue
+
+            if raw == "clear-sessions":
+                app.conversation.clear_sessions()
+                print("Conversation sessions cleared.")
                 continue
 
             if raw.startswith("delete-episode "):

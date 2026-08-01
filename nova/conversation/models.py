@@ -36,3 +36,25 @@ class ConversationEpisode:
             "assistant_text": self.assistant_text,
             "created_at": self.created_at,
         }
+
+
+@dataclass(frozen=True)
+class ConversationSession:
+    id: int
+    topic: str
+    summary: str
+    episode_count: int
+    started_at: str
+    updated_at: str
+    ended_at: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "topic": self.topic,
+            "summary": self.summary,
+            "episode_count": self.episode_count,
+            "started_at": self.started_at,
+            "updated_at": self.updated_at,
+            "ended_at": self.ended_at,
+        }

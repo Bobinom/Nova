@@ -148,6 +148,7 @@ class NovaApplication:
             "memory_categories": categories,
             "conversation_turns": len(self.conversation.history(1000)),
             "conversation_episodes": len(self.conversation.episodes(1000)),
+            "conversation_sessions": len(self.conversation.sessions(1000)),
             "privacy": self.conversation.privacy_status(),
         }
 
@@ -163,6 +164,7 @@ class NovaApplication:
                 for memory in self.memory.list_memories()
             ],
             "conversation_episodes": self.conversation.episodes(1000),
+            "conversation_sessions": self.conversation.sessions(1000),
         }
         return self.data.export_json(payload, destination)
 
