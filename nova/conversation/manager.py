@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -21,6 +22,20 @@ class ConversationManager:
         "you",
     }
 
+    _TOPIC_STOP_WORDS = _EPISODE_STOP_WORDS | {
+        "an", "card", "graphic", "graphics", "interested", "let", "plan",
+        "processor", "s", "using", "want", "would",
+    }
+
+    _OLLAMA_FAILURE_PREFIXES = (
+        "i couldn't connect to ollama",
+        "ollama error:",
+        "ollama request failed:",
+        "ollama returned an empty response",
+        "ollama returned an invalid response",
+        "ollama took too long to respond",
+    )
+
     _TRIVIAL_EPISODE_TEXT = {
         "good morning", "good night", "hello", "hey", "hi", "thanks",
         "thank you",
@@ -30,6 +45,7 @@ class ConversationManager:
         "api key", "bank account", "credit card", "password", "passcode",
         "private key", "secret key", "security number", "social security",
     }
+
     def __init__(
         self,
         *,
@@ -89,7 +105,9 @@ class ConversationManager:
     def episodes(self, limit: int = 20) -> list[dict[str, Any]]:
         return [
             episode.as_dict()
-            for episode in self.repository.list_episodes(limit)
+            for episode in self._quality_episodes(
+                self.repository.list_episodes(200),
+            )[:limit]
         ]
 
     def delete_episode(self, episode_id: int) -> bool:
@@ -359,18 +377,25 @@ class ConversationManager:
             return
         if any(term in normalized for term in self._SENSITIVE_EPISODE_TERMS):
             return
+        if self._is_failed_response(assistant_text):
+            return
         terms = self._episode_terms(user_text)
         if len(normalized.split()) < 3 or not terms:
             return
-        topic = " ".join(sorted(terms)[:4])
+        topic = self._episode_topic(user_text)
         user_summary = self._truncate(user_text, 220)
         assistant_summary = self._truncate(assistant_text, 280)
-        self.repository.add_episode(
-            topic=topic,
-            summary=f"User: {user_summary} Nova: {assistant_summary}",
-            user_text=user_text,
-            assistant_text=assistant_text,
-        )
+        episode_data = {
+            "topic": topic,
+            "summary": f"User: {user_summary} Nova: {assistant_summary}",
+            "user_text": user_text,
+            "assistant_text": assistant_text,
+        }
+        duplicate = self._find_duplicate_episode(user_text)
+        if duplicate is not None:
+            self.repository.update_episode(duplicate.id, **episode_data)
+        else:
+            self.repository.add_episode(**episode_data)
 
     def _search_episodes(
         self,
@@ -379,7 +404,9 @@ class ConversationManager:
     ) -> list[ConversationEpisode]:
         terms = self._episode_terms(query)
         ranked: list[tuple[int, int, ConversationEpisode]] = []
-        for episode in self.repository.list_episodes(200):
+        for episode in self._quality_episodes(
+            self.repository.list_episodes(200),
+        ):
             if not self._episode_time_matches(query, episode.created_at):
                 continue
             topic_terms = self._episode_terms(episode.topic)
@@ -394,6 +421,63 @@ class ConversationManager:
                 ranked.append((score, episode.id, episode))
         ranked.sort(key=lambda item: (-item[0], -item[1]))
         return [episode for _, _, episode in ranked[:limit]]
+
+    def _find_duplicate_episode(
+        self,
+        user_text: str,
+    ) -> ConversationEpisode | None:
+        for episode in self._quality_episodes(
+            self.repository.list_episodes(50),
+        ):
+            if self._episode_similarity(user_text, episode.user_text) >= 0.85:
+                return episode
+        return None
+
+    def _quality_episodes(
+        self,
+        episodes: list[ConversationEpisode],
+    ) -> list[ConversationEpisode]:
+        quality: list[ConversationEpisode] = []
+        for episode in episodes:
+            if self._is_failed_response(episode.assistant_text):
+                continue
+            if any(
+                self._episode_similarity(episode.user_text, kept.user_text) >= 0.85
+                for kept in quality
+            ):
+                continue
+            quality.append(
+                replace(
+                    episode,
+                    topic=self._episode_topic(episode.user_text),
+                ),
+            )
+        return quality
+
+    @classmethod
+    def _episode_topic(cls, text: str) -> str:
+        topic_terms: list[str] = []
+        seen: set[str] = set()
+        for term in re.findall(r"[\w]+", text):
+            normalized = term.lower()
+            if normalized in cls._TOPIC_STOP_WORDS or normalized in seen:
+                continue
+            seen.add(normalized)
+            topic_terms.append(term)
+        return " ".join(topic_terms[:5]) or "conversation"
+
+    @classmethod
+    def _episode_similarity(cls, first: str, second: str) -> float:
+        first_terms = cls._episode_terms(first)
+        second_terms = cls._episode_terms(second)
+        if not first_terms or not second_terms:
+            return 0.0
+        return len(first_terms & second_terms) / len(first_terms | second_terms)
+
+    @classmethod
+    def _is_failed_response(cls, response: str) -> bool:
+        normalized = response.strip().lower()
+        return normalized.startswith(cls._OLLAMA_FAILURE_PREFIXES)
 
     @classmethod
     def _episode_terms(cls, text: str) -> set[str]:

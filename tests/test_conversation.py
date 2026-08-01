@@ -19,6 +19,16 @@ class RecordingLLM:
         return "LLM response"
 
 
+class SequencedLLM(RecordingLLM):
+    def __init__(self, responses):
+        super().__init__()
+        self.responses = iter(responses)
+
+    def generate(self, system_prompt, history, prompt):
+        self.calls.append((system_prompt, history, prompt))
+        return next(self.responses)
+
+
 class ConversationTests(unittest.TestCase):
     def make_manager(self, database: Path, llm=None):
         events = EventBus(logging.getLogger("test.conversation"))
@@ -354,6 +364,90 @@ class ConversationTests(unittest.TestCase):
             self.assertEqual(len(manager.episodes()), 1)
             manager.clear_episodes()
             self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_ollama_failure_is_not_saved_as_episode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = SequencedLLM([
+                "I couldn't connect to Ollama. "
+                "Make sure Ollama is running on this computer.",
+            ])
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle(
+                "Let's plan a PC upgrade using a Ryzen processor"
+            )
+
+            self.assertEqual(manager.episodes(), [])
+            manager.close()
+            memory.close()
+
+    def test_duplicate_episode_is_updated_with_newest_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = SequencedLLM(["First answer", "Improved answer"])
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            prompt = (
+                "Let's plan a PC upgrade using a Ryzen processor "
+                "and an RTX graphics card."
+            )
+
+            manager.handle(prompt)
+            original_id = manager.episodes()[0]["id"]
+            manager.handle(prompt)
+
+            episodes = manager.episodes()
+            self.assertEqual(len(episodes), 1)
+            self.assertEqual(episodes[0]["id"], original_id)
+            self.assertEqual(episodes[0]["assistant_text"], "Improved answer")
+            self.assertEqual(episodes[0]["topic"], "PC upgrade Ryzen RTX")
+            manager.close()
+            memory.close()
+
+    def test_existing_failed_and_duplicate_episodes_are_hidden(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            prompt = "Let's plan a Ryzen PC upgrade"
+            manager.repository.add_episode(
+                topic="pc upgrade",
+                summary="Failed attempt",
+                user_text=prompt,
+                assistant_text="I couldn't connect to Ollama.",
+            )
+            manager.repository.add_episode(
+                topic="pc upgrade",
+                summary="Older successful attempt",
+                user_text=prompt,
+                assistant_text="Older answer",
+            )
+            manager.repository.add_episode(
+                topic="pc upgrade",
+                summary="Newest successful attempt",
+                user_text=prompt,
+                assistant_text="Newest answer",
+            )
+
+            episodes = manager.episodes()
+            result = manager.handle(
+                "What did we discuss about upgrading my PC?"
+            )
+
+            self.assertEqual(len(episodes), 1)
+            self.assertEqual(episodes[0]["assistant_text"], "Newest answer")
+            self.assertEqual(episodes[0]["topic"], "Ryzen PC upgrade")
+            self.assertEqual(result["response"].count("\n- "), 1)
+            self.assertNotIn("Failed attempt", result["response"])
+            self.assertNotIn("Older successful attempt", result["response"])
             manager.close()
             memory.close()
 

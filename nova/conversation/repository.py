@@ -142,6 +142,39 @@ class ConversationRepository:
             ).fetchall()
             return [self._row_to_episode(row) for row in rows]
 
+    def update_episode(
+        self,
+        episode_id: int,
+        *,
+        topic: str,
+        summary: str,
+        user_text: str,
+        assistant_text: str,
+    ) -> ConversationEpisode:
+        with self._lock:
+            connection = self._require_connection()
+            connection.execute(
+                """
+                UPDATE conversation_episodes
+                SET topic = ?, summary = ?, user_text = ?, assistant_text = ?,
+                    created_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (topic, summary, user_text, assistant_text, episode_id),
+            )
+            connection.commit()
+            row = connection.execute(
+                """
+                SELECT id, topic, summary, user_text, assistant_text, created_at
+                FROM conversation_episodes
+                WHERE id = ?
+                """,
+                (episode_id,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError(f"Conversation episode {episode_id} not found.")
+            return self._row_to_episode(row)
+
     def delete_episode(self, episode_id: int) -> bool:
         with self._lock:
             connection = self._require_connection()
