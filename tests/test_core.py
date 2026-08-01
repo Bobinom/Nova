@@ -1,10 +1,29 @@
 import logging, tempfile, unittest
 from pathlib import Path
+
+from nova import __version__
+from nova.app import NovaStatus
 from nova.core.events import EventBus
 from nova.core.settings import SettingsManager
 from nova.core.state import StateStore
 
 class CoreTests(unittest.TestCase):
+    def test_release_version(self):
+        self.assertEqual(__version__, "5.0.0")
+
+    def test_status_uses_release_version(self):
+        status = NovaStatus(
+            version=__version__,
+            running=True,
+            loaded_plugins=0,
+            memories=3,
+            conversation_turns=4,
+            conversation_episodes=2,
+        ).as_dict()
+
+        self.assertEqual(status["version"], "5.0.0")
+        self.assertEqual(status["conversation_episodes"], 2)
+
     def test_event_delivery(self):
         bus = EventBus(logging.getLogger("test"))
         received = []
