@@ -24,7 +24,7 @@ class ConversationManager:
 
     _TOPIC_STOP_WORDS = _EPISODE_STOP_WORDS | {
         "an", "card", "graphic", "graphics", "interested", "let", "plan",
-        "processor", "s", "using", "want", "would",
+        "lets", "processor", "s", "using", "want", "would",
     }
 
     _OLLAMA_FAILURE_PREFIXES = (
@@ -391,8 +391,12 @@ class ConversationManager:
             "user_text": user_text,
             "assistant_text": assistant_text,
         }
-        duplicate = self._find_duplicate_episode(user_text)
+        duplicate = self._find_duplicate_episode(user_text, assistant_text)
         if duplicate is not None:
+            episode_data["topic"] = self._better_topic(
+                duplicate.topic,
+                topic,
+            )
             self.repository.update_episode(duplicate.id, **episode_data)
         else:
             self.repository.add_episode(**episode_data)
@@ -425,11 +429,17 @@ class ConversationManager:
     def _find_duplicate_episode(
         self,
         user_text: str,
+        assistant_text: str,
     ) -> ConversationEpisode | None:
         for episode in self._quality_episodes(
             self.repository.list_episodes(50),
         ):
-            if self._episode_similarity(user_text, episode.user_text) >= 0.85:
+            if self._episodes_are_duplicates(
+                user_text,
+                assistant_text,
+                episode.user_text,
+                episode.assistant_text,
+            ):
                 return episode
         return None
 
@@ -441,17 +451,34 @@ class ConversationManager:
         for episode in episodes:
             if self._is_failed_response(episode.assistant_text):
                 continue
-            if any(
-                self._episode_similarity(episode.user_text, kept.user_text) >= 0.85
-                for kept in quality
-            ):
-                continue
-            quality.append(
-                replace(
-                    episode,
-                    topic=self._episode_topic(episode.user_text),
+            cleaned = replace(
+                episode,
+                topic=self._better_topic(
+                    episode.topic,
+                    self._episode_topic(episode.user_text),
                 ),
             )
+            duplicate_index = next(
+                (
+                    index
+                    for index, kept in enumerate(quality)
+                    if self._episodes_are_duplicates(
+                        cleaned.user_text,
+                        cleaned.assistant_text,
+                        kept.user_text,
+                        kept.assistant_text,
+                    )
+                ),
+                None,
+            )
+            if duplicate_index is not None:
+                kept = quality[duplicate_index]
+                quality[duplicate_index] = replace(
+                    kept,
+                    topic=self._better_topic(kept.topic, cleaned.topic),
+                )
+                continue
+            quality.append(cleaned)
         return quality
 
     @classmethod
@@ -473,6 +500,40 @@ class ConversationManager:
         if not first_terms or not second_terms:
             return 0.0
         return len(first_terms & second_terms) / len(first_terms | second_terms)
+
+    @classmethod
+    def _episodes_are_duplicates(
+        cls,
+        first_user: str,
+        first_assistant: str,
+        second_user: str,
+        second_assistant: str,
+    ) -> bool:
+        if cls._episode_similarity(first_user, second_user) >= 0.85:
+            return True
+        first_response_terms = cls._episode_terms(first_assistant)
+        second_response_terms = cls._episode_terms(second_assistant)
+        if len(first_response_terms) < 12 or len(second_response_terms) < 12:
+            return False
+        return cls._episode_similarity(first_assistant, second_assistant) >= 0.64
+
+    @classmethod
+    def _better_topic(cls, first: str, second: str) -> str:
+        first_score = cls._topic_score(first)
+        second_score = cls._topic_score(second)
+        if second_score > first_score:
+            return second
+        if first_score > second_score:
+            return first
+        return second if len(second.split()) < len(first.split()) else first
+
+    @classmethod
+    def _topic_score(cls, topic: str) -> int:
+        return len({
+            term.lower()
+            for term in re.findall(r"[\w]+", topic)
+            if term.lower() not in cls._TOPIC_STOP_WORDS
+        })
 
     @classmethod
     def _is_failed_response(cls, response: str) -> bool:
