@@ -515,13 +515,25 @@ class ConversationManager:
         second_response_terms = cls._episode_terms(second_assistant)
         if len(first_response_terms) < 12 or len(second_response_terms) < 12:
             return False
-        return cls._episode_similarity(first_assistant, second_assistant) >= 0.72
+        return cls._episode_similarity(first_assistant, second_assistant) >= 0.64
 
-    @staticmethod
-    def _better_topic(first: str, second: str) -> str:
-        first_size = len(first.split())
-        second_size = len(second.split())
-        return second if second_size > first_size else first
+    @classmethod
+    def _better_topic(cls, first: str, second: str) -> str:
+        first_score = cls._topic_score(first)
+        second_score = cls._topic_score(second)
+        if second_score > first_score:
+            return second
+        if first_score > second_score:
+            return first
+        return second if len(second.split()) < len(first.split()) else first
+
+    @classmethod
+    def _topic_score(cls, topic: str) -> int:
+        return len({
+            term.lower()
+            for term in re.findall(r"[\w]+", topic)
+            if term.lower() not in cls._TOPIC_STOP_WORDS
+        })
 
     @classmethod
     def _is_failed_response(cls, response: str) -> bool:

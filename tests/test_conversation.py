@@ -503,6 +503,51 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_live_pc_episode_paraphrases_collapse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, memory = self.make_manager(Path(directory) / "nova.db")
+            detailed_prompt = (
+                "Let's plan a PC upgrade using a Ryzen processor and an RTX "
+                "graphics card."
+            )
+            first_response = (
+                "Since we're starting from scratch, let's consider some general "
+                "guidelines. For a Ryzen processor, how much budget are you "
+                "willing to spend? A higher-end Ryzen 9 or 7 series might be "
+                "out of your reach, but there are more affordable options like "
+                "the Ryzen 5 series. Which one do you think suits your needs? "
+                "Also, what is the approximate power consumption of the RTX "
+                "graphics card you're interested in?"
+            )
+            second_response = (
+                "Let's plan a PC upgrade using a Ryzen processor and an RTX "
+                "graphics card. We previously discussed some general guidelines, "
+                "but since we're starting from scratch, let's begin again. For a "
+                "Ryzen processor, how much budget are you willing to spend? A "
+                "higher-end Ryzen 9 or 7 series might be out of your reach, but "
+                "there are more affordable options like the Ryzen 5 series."
+            )
+            manager.repository.add_episode(
+                topic="an card graphic graphics",
+                summary="Older PC discussion",
+                user_text=detailed_prompt,
+                assistant_text=first_response,
+            )
+            manager.repository.add_episode(
+                topic="Lets buid pc",
+                summary="Newer PC discussion",
+                user_text="Lets buid a pc",
+                assistant_text=second_response,
+            )
+
+            episodes = manager.episodes()
+
+            self.assertEqual(len(episodes), 1)
+            self.assertEqual(episodes[0]["assistant_text"], second_response)
+            self.assertEqual(episodes[0]["topic"], "PC upgrade Ryzen RTX")
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()
