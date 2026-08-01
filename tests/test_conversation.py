@@ -451,6 +451,58 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_paraphrased_pc_discussions_merge_by_response_similarity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first_response = (
+                "Let's plan a PC upgrade using a Ryzen processor and an RTX "
+                "graphics card. We should start by choosing a budget, then "
+                "compare the Ryzen 5 and Ryzen 7 options before selecting a "
+                "compatible motherboard, power supply, memory, and graphics card."
+            )
+            second_response = (
+                "Let's plan a PC upgrade using a Ryzen processor and an RTX "
+                "graphics card. We previously discussed general guidelines, "
+                "so start by choosing a budget, compare Ryzen 5 and Ryzen 7, "
+                "then select a compatible motherboard, power supply, memory, "
+                "and graphics card."
+            )
+            llm = SequencedLLM([first_response, second_response])
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+            detailed_prompt = (
+                "Let's plan a PC upgrade using a Ryzen processor and an RTX "
+                "graphics card."
+            )
+
+            manager.handle(detailed_prompt)
+            original_id = manager.episodes()[0]["id"]
+            manager.handle("Lets buid a pc")
+
+            episodes = manager.episodes()
+            self.assertEqual(len(episodes), 1)
+            self.assertEqual(episodes[0]["id"], original_id)
+            self.assertEqual(episodes[0]["assistant_text"], second_response)
+            self.assertEqual(episodes[0]["topic"], "PC upgrade Ryzen RTX")
+            manager.close()
+            memory.close()
+
+    def test_short_generic_responses_do_not_merge_unrelated_topics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+            )
+
+            manager.handle("Plan the Nova memory architecture")
+            manager.handle("Compare options for a gaming monitor")
+
+            self.assertEqual(len(manager.episodes()), 2)
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()
