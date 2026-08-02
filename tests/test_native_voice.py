@@ -9,6 +9,16 @@ from nova.voice.native import MacOSSpeechInput
 
 
 class NativeVoiceTests(unittest.TestCase):
+    def test_native_helper_keeps_main_run_loop_active_for_callbacks(self):
+        source = (
+            Path(__file__).parents[1]
+            / "nova" / "voice" / "macos" / "NovaSpeechInput.m"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("RunLoopFor(seconds);", source)
+        self.assertIn("!recognitionFinished", source)
+        self.assertNotIn("usleep(", source)
+
     def test_setup_builds_permission_declared_signed_app_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             provider = MacOSSpeechInput(Path(directory))
