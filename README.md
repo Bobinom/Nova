@@ -187,6 +187,11 @@ directly without a shell.
 If you previously configured `voice-input`, run `voice-input-clear` to return to
 Nova's built-in on-device provider.
 
+If Nova reports that no speech was detected, open **System Settings > Sound >
+Input**, select the microphone you are actually using, and confirm that its
+input-level meter moves while you speak. Connected AirPods or Bluetooth headsets
+can become the default input even when you intend to use the Mac's microphone.
+
 Computer actions are deliberately narrow. Nova can open an allowlisted macOS app
 such as Safari, Notes, Calendar, Finder, or System Settings. Website opening is
 off by default. Actions themselves are also off until explicitly enabled, and

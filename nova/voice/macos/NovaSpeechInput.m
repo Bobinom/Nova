@@ -43,6 +43,22 @@ static void Fail(const char *message) {
     exit(1);
 }
 
+static void RunLoopFor(double seconds) {
+    Class runLoopClass = objc_getClass("NSRunLoop");
+    id runLoop = ((id (*)(id, SEL))objc_msgSend)(
+        (id)runLoopClass, Selector("currentRunLoop")
+    );
+    Class dateClass = objc_getClass("NSDate");
+    id deadline = ((id (*)(id, SEL, double))objc_msgSend)(
+        (id)dateClass,
+        Selector("dateWithTimeIntervalSinceNow:"),
+        seconds
+    );
+    ((void (*)(id, SEL, id))objc_msgSend)(
+        runLoop, Selector("runUntilDate:"), deadline
+    );
+}
+
 static const char *ArgumentAfter(
     int argc,
     const char *argv[],
@@ -227,9 +243,9 @@ int main(int argc, const char *argv[]) {
         audioTap
     );
 
-    dispatch_semaphore_t completion = dispatch_semaphore_create(0);
     __block id transcript = nil;
     __block id recognitionError = nil;
+    __block BOOL recognitionFinished = NO;
     void (^resultHandler)(id, id) = ^(id result, id error) {
         if (result != nil) {
             id best = ((id (*)(id, SEL))objc_msgSend)(
@@ -244,13 +260,13 @@ int main(int argc, const char *argv[]) {
             BOOL final = ((BOOL (*)(id, SEL))objc_msgSend)(
                 result, Selector("isFinal")
             );
-            if (final) dispatch_semaphore_signal(completion);
+            if (final) recognitionFinished = YES;
         }
         if (error != nil) {
             recognitionError = ((id (*)(id, SEL))objc_msgSend)(
                 error, Selector("retain")
             );
-            dispatch_semaphore_signal(completion);
+            recognitionFinished = YES;
         }
     };
     id task = ((id (*)(id, SEL, id, id))objc_msgSend)(
@@ -279,16 +295,15 @@ int main(int argc, const char *argv[]) {
         Fail(message);
     }
 
-    usleep((useconds_t)(seconds * 1000000));
+    RunLoopFor(seconds);
     ((void (*)(id, SEL))objc_msgSend)(engine, Selector("stop"));
     ((void (*)(id, SEL, NSUInteger))objc_msgSend)(
         input, Selector("removeTapOnBus:"), 0
     );
     ((void (*)(id, SEL))objc_msgSend)(request, Selector("endAudio"));
-    dispatch_semaphore_wait(
-        completion,
-        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)
-    );
+    for (int attempt = 0; attempt < 100 && !recognitionFinished; attempt++) {
+        RunLoopFor(0.1);
+    }
     ((void (*)(id, SEL))objc_msgSend)(task, Selector("cancel"));
 
     const char *text = UTF8(transcript);
@@ -297,12 +312,16 @@ int main(int argc, const char *argv[]) {
             id description = ((id (*)(id, SEL))objc_msgSend)(
                 recognitionError, Selector("localizedDescription")
             );
+            const char *details = UTF8(description);
+            if (strstr(details, "No speech detected") != NULL) {
+                Fail("No speech was detected. In System Settings > Sound > Input, select the microphone you are speaking into and verify that its input-level meter moves.");
+            }
             char message[1024];
             snprintf(
                 message,
                 sizeof(message),
                 "Speech recognition failed: %s",
-                UTF8(description)
+                details
             );
             Fail(message);
         } else if (audioBufferCount == 0) {
