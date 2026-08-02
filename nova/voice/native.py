@@ -13,7 +13,7 @@ from typing import Any
 class MacOSSpeechInput:
     """Build and run Nova's local Apple Speech-framework helper."""
 
-    HELPER_VERSION = "2"
+    HELPER_VERSION = "3"
 
     def __init__(
         self,

@@ -19,6 +19,17 @@ class NativeVoiceTests(unittest.TestCase):
         self.assertIn("!recognitionFinished", source)
         self.assertNotIn("usleep(", source)
 
+    def test_native_helper_uses_core_audio_native_input_format(self):
+        source = (
+            Path(__file__).parents[1]
+            / "nova" / "voice" / "macos" / "NovaSpeechInput.m"
+        ).read_text(encoding="utf-8")
+
+        tap = source.split(
+            'Selector("installTapOnBus:bufferSize:format:block:")', 1
+        )[1]
+        self.assertIn("1024,\n        nil,\n        audioTap", tap)
+
     def test_setup_builds_permission_declared_signed_app_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             provider = MacOSSpeechInput(Path(directory))

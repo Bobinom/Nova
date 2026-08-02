@@ -239,7 +239,7 @@ int main(int argc, const char *argv[]) {
         Selector("installTapOnBus:bufferSize:format:block:"),
         0,
         1024,
-        format,
+        nil,
         audioTap
     );
 
