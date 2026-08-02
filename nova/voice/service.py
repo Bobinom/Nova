@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Protocol
 
 from nova.core.settings import SettingsManager
+from nova.voice.native import MacOSSpeechInput
 
 
 class SpeechOutput(Protocol):
@@ -75,21 +78,36 @@ class VoiceService:
         settings: SettingsManager,
         output: SpeechOutput | None = None,
         speech_input: SpeechInput | None = None,
+        data_dir: Path | None = None,
     ) -> None:
         self.settings = settings
         self.output = output or MacOSSpeechOutput()
         command = settings.get("voice.input_command", [])
-        self.input = speech_input or CommandSpeechInput(
+        self.input = speech_input
+        self.command_input = CommandSpeechInput(
             command if isinstance(command, list) else []
+        )
+        self.native_input = MacOSSpeechInput(
+            data_dir or settings.path.parent,
+            locale=self._locale(),
+            duration=self._duration(),
         )
 
     def status(self) -> dict[str, Any]:
-        self._refresh_command_input()
+        provider = self._current_input()
         return {
             "enabled": bool(self.settings.get("voice.enabled", False)),
             "auto_speak": bool(self.settings.get("voice.auto_speak", False)),
             "output_available": self.output.available(),
-            "input_available": self.input.available(),
+            "input_available": provider.available(),
+            "input_provider": self._provider_name(provider),
+            "input_installed": (
+                self.native_input.installed()
+                if provider is self.native_input
+                else None
+            ),
+            "locale": self._locale(),
+            "listen_seconds": self._duration(),
             "voice": self.settings.get("voice.name", None),
             "rate": self._rate(),
         }
@@ -103,7 +121,23 @@ class VoiceService:
     def set_input_command(self, command: list[str]) -> None:
         cleaned = [part for part in command if part]
         self.settings.set("voice.input_command", cleaned)
-        self._refresh_command_input()
+        self.command_input.command = cleaned
+
+    def set_locale(self, locale: str) -> None:
+        cleaned = locale.strip()
+        if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?", cleaned):
+            raise ValueError("Voice locale must look like en-US or sv-SE.")
+        self.settings.set("voice.locale", cleaned)
+        self.native_input.locale = cleaned
+
+    def set_duration(self, seconds: int) -> None:
+        duration = min(20, max(2, int(seconds)))
+        self.settings.set("voice.listen_seconds", duration)
+        self.native_input.duration = duration
+
+    def setup_input(self) -> dict[str, Any]:
+        self._refresh_inputs()
+        return self.native_input.check()
 
     def speak(self, text: str, *, force: bool = False) -> bool:
         if not force and not self.settings.get("voice.enabled", False):
@@ -123,14 +157,44 @@ class VoiceService:
     def listen(self) -> str:
         if not self.settings.get("voice.enabled", False):
             raise RuntimeError("Voice mode is disabled. Use voice-on first.")
-        self._refresh_command_input()
-        return self.input.listen()
+        provider = self._current_input()
+        if not provider.available():
+            raise RuntimeError(
+                "Microphone input is unavailable. Run voice-setup for details."
+            )
+        return provider.listen()
 
-    def _refresh_command_input(self) -> None:
-        if not isinstance(self.input, CommandSpeechInput):
-            return
+    def _refresh_inputs(self) -> None:
         command = self.settings.get("voice.input_command", [])
-        self.input.command = command if isinstance(command, list) else []
+        self.command_input.command = command if isinstance(command, list) else []
+        self.native_input.locale = self._locale()
+        self.native_input.duration = self._duration()
+
+    def _current_input(self) -> SpeechInput:
+        self._refresh_inputs()
+        if self.input is not None:
+            return self.input
+        if self.command_input.command:
+            return self.command_input
+        return self.native_input
+
+    def _locale(self) -> str:
+        configured = self.settings.get("voice.locale", "en-US")
+        return str(configured or "en-US")
+
+    def _duration(self) -> int:
+        configured = self.settings.get("voice.listen_seconds", 7)
+        try:
+            return min(20, max(2, int(configured)))
+        except (TypeError, ValueError):
+            return 7
+
+    def _provider_name(self, provider: SpeechInput) -> str:
+        if provider is self.native_input:
+            return "macos-on-device"
+        if provider is self.command_input:
+            return "local-command"
+        return "injected"
 
     def _rate(self) -> int:
         configured = self.settings.get("voice.rate", 190)

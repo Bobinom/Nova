@@ -20,6 +20,8 @@ DEFAULT_SETTINGS = {
         "name": None,
         "rate": 190,
         "input_command": [],
+        "locale": "en-US",
+        "listen_seconds": 7,
     },
     "actions": {
         "enabled": False,

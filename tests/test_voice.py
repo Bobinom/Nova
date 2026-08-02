@@ -100,6 +100,18 @@ class VoiceServiceTests(unittest.TestCase):
                 ["local-transcriber", "--once"],
             )
 
+    def test_locale_and_duration_are_validated_and_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, _ = self.make_service(Path(directory))
+
+            service.set_locale("sv-SE")
+            service.set_duration(30)
+
+            self.assertEqual(service.status()["locale"], "sv-SE")
+            self.assertEqual(service.status()["listen_seconds"], 20)
+            with self.assertRaises(ValueError):
+                service.set_locale("not a locale")
+
     def test_application_can_listen_respond_and_speak(self):
         with tempfile.TemporaryDirectory() as directory:
             app = NovaApplication(base_dir=Path(directory))

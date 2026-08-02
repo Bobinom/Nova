@@ -60,7 +60,7 @@ class NovaApplication:
         self.data = DataManager(self.paths.database_file, self.paths.data_dir)
         self.database = DatabaseManager(self.paths.database_file, self.paths.data_dir)
         self.actions = ActionService(self.settings)
-        self.voice = VoiceService(self.settings)
+        self.voice = VoiceService(self.settings, data_dir=self.paths.data_dir)
 
         self.events = EventBus(
             logger=self.logger,
