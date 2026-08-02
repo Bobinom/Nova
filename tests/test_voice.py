@@ -112,6 +112,18 @@ class VoiceServiceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service.set_locale("not a locale")
 
+    def test_recognition_mode_is_explicit_and_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, _ = self.make_service(Path(directory))
+
+            self.assertEqual(service.status()["recognition_mode"], "on-device")
+            service.set_recognition_mode("automatic")
+
+            self.assertEqual(service.status()["recognition_mode"], "automatic")
+            self.assertEqual(service.native_input.recognition_mode, "automatic")
+            with self.assertRaises(ValueError):
+                service.set_recognition_mode("online-only")
+
     def test_application_can_listen_respond_and_speak(self):
         with tempfile.TemporaryDirectory() as directory:
             app = NovaApplication(base_dir=Path(directory))

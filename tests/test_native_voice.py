@@ -80,7 +80,10 @@ class NativeVoiceTests(unittest.TestCase):
 
             self.assertTrue(status["ready"])
             command = run.call_args.args[0]
-            self.assertEqual(command[1:], ["--check", "--locale", "sv-SE"])
+            self.assertEqual(command[1:], [
+                "--check", "--locale", "sv-SE",
+                "--recognition-mode", "on-device",
+            ])
 
     def test_listen_returns_only_the_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -106,6 +109,29 @@ class NativeVoiceTests(unittest.TestCase):
             ])
             self.assertIn("--locale", command)
             self.assertIn("--output", command)
+
+    def test_automatic_recognition_mode_is_forwarded_to_helper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            provider = MacOSSpeechInput(
+                Path(directory), recognition_mode="automatic"
+            )
+            provider.bundle.parent.mkdir(parents=True)
+
+            def fake_run(command, **kwargs):
+                output = Path(command[command.index("--output") + 1])
+                output.write_text("Hello Nova\n", encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                patch.object(provider, "setup"),
+                patch("nova.voice.native.shutil.which", return_value="/usr/bin/open"),
+                patch("nova.voice.native.subprocess.run", side_effect=fake_run) as run,
+            ):
+                provider.listen()
+
+            command = run.call_args.args[0]
+            mode = command.index("--recognition-mode")
+            self.assertEqual(command[mode + 1], "automatic")
 
     def test_native_errors_are_cleaned_for_the_user(self):
         with tempfile.TemporaryDirectory() as directory:

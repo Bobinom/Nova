@@ -91,6 +91,7 @@ class VoiceService:
             data_dir or settings.path.parent,
             locale=self._locale(),
             duration=self._duration(),
+            recognition_mode=self._recognition_mode(),
         )
 
     def status(self) -> dict[str, Any]:
@@ -108,6 +109,7 @@ class VoiceService:
             ),
             "locale": self._locale(),
             "listen_seconds": self._duration(),
+            "recognition_mode": self._recognition_mode(),
             "voice": self.settings.get("voice.name", None),
             "rate": self._rate(),
         }
@@ -134,6 +136,15 @@ class VoiceService:
         duration = min(20, max(2, int(seconds)))
         self.settings.set("voice.listen_seconds", duration)
         self.native_input.duration = duration
+
+    def set_recognition_mode(self, mode: str) -> None:
+        cleaned = mode.strip().lower()
+        if cleaned not in {"on-device", "automatic"}:
+            raise ValueError(
+                "Recognition mode must be on-device or automatic."
+            )
+        self.settings.set("voice.recognition_mode", cleaned)
+        self.native_input.recognition_mode = cleaned
 
     def setup_input(self) -> dict[str, Any]:
         self._refresh_inputs()
@@ -169,6 +180,7 @@ class VoiceService:
         self.command_input.command = command if isinstance(command, list) else []
         self.native_input.locale = self._locale()
         self.native_input.duration = self._duration()
+        self.native_input.recognition_mode = self._recognition_mode()
 
     def _current_input(self) -> SpeechInput:
         self._refresh_inputs()
@@ -189,9 +201,15 @@ class VoiceService:
         except (TypeError, ValueError):
             return 7
 
+    def _recognition_mode(self) -> str:
+        configured = str(
+            self.settings.get("voice.recognition_mode", "on-device")
+        ).lower()
+        return configured if configured in {"on-device", "automatic"} else "on-device"
+
     def _provider_name(self, provider: SpeechInput) -> str:
         if provider is self.native_input:
-            return "macos-on-device"
+            return f"macos-{self._recognition_mode()}"
         if provider is self.command_input:
             return "local-command"
         return "injected"

@@ -13,7 +13,7 @@ from typing import Any
 class MacOSSpeechInput:
     """Build and run Nova's local Apple Speech-framework helper."""
 
-    HELPER_VERSION = "3"
+    HELPER_VERSION = "4"
 
     def __init__(
         self,
@@ -21,10 +21,12 @@ class MacOSSpeechInput:
         *,
         locale: str = "en-US",
         duration: int = 7,
+        recognition_mode: str = "on-device",
     ) -> None:
         self.data_dir = data_dir
         self.locale = locale
         self.duration = duration
+        self.recognition_mode = recognition_mode
         self.source = Path(__file__).with_name("macos") / "NovaSpeechInput.m"
         self.bundle = (
             data_dir / "voice" /
@@ -118,10 +120,20 @@ class MacOSSpeechInput:
 
     def check(self) -> dict[str, Any]:
         self.setup()
-        completed = self._run(["--check", "--locale", self.locale], timeout=20)
+        completed = self._run(
+            [
+                "--check",
+                "--locale",
+                self.locale,
+                "--recognition-mode",
+                self.recognition_mode,
+            ],
+            timeout=20,
+        )
         return {
             "ready": completed.stdout.strip() == "ready",
             "locale": self.locale,
+            "recognition_mode": self.recognition_mode,
             "installed": self.installed(),
             "bundle": str(self.bundle),
         }
@@ -147,6 +159,8 @@ class MacOSSpeechInput:
                 self.locale,
                 "--seconds",
                 str(self.duration),
+                "--recognition-mode",
+                self.recognition_mode,
                 "--output",
                 str(result_path),
                 "--error",
