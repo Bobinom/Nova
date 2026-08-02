@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
         "input_command": [],
         "locale": "en-US",
         "listen_seconds": 7,
+        "recognition_mode": "on-device",
     },
     "actions": {
         "enabled": False,

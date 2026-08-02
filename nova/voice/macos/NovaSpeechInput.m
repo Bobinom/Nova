@@ -151,6 +151,11 @@ int main(int argc, const char *argv[]) {
     double seconds = secondsValue == NULL ? 7 : atof(secondsValue);
     if (seconds < 2) seconds = 2;
     if (seconds > 20) seconds = 20;
+    const char *recognitionMode = ArgumentAfter(
+        argc, argv, "--recognition-mode"
+    );
+    BOOL requiresOnDevice = recognitionMode == NULL ||
+        strcmp(recognitionMode, "automatic") != 0;
 
     Class localeClass = objc_getClass("NSLocale");
     id locale = ((id (*)(id, SEL, id))objc_msgSend)(
@@ -179,7 +184,7 @@ int main(int argc, const char *argv[]) {
     BOOL onDevice = ((BOOL (*)(id, SEL))objc_msgSend)(
         recognizer, Selector("supportsOnDeviceRecognition")
     );
-    if (!onDevice) {
+    if (requiresOnDevice && !onDevice) {
         Fail("On-device speech recognition is unavailable for the configured locale.");
     }
     if (ArgumentAfter(argc, argv, "--check") != NULL ||
@@ -223,7 +228,9 @@ int main(int argc, const char *argv[]) {
         request, Selector("setShouldReportPartialResults:"), YES
     );
     ((void (*)(id, SEL, BOOL))objc_msgSend)(
-        request, Selector("setRequiresOnDeviceRecognition:"), YES
+        request,
+        Selector("setRequiresOnDeviceRecognition:"),
+        requiresOnDevice
     );
 
     __block NSUInteger audioBufferCount = 0;
@@ -239,7 +246,7 @@ int main(int argc, const char *argv[]) {
         Selector("installTapOnBus:bufferSize:format:block:"),
         0,
         1024,
-        format,
+        nil,
         audioTap
     );
 

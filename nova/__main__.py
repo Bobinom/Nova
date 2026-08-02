@@ -120,6 +120,7 @@ def main() -> None:
     print("  voice-setup")
     print("  voice-locale <locale>")
     print("  voice-duration <seconds>")
+    print("  voice-recognition <on-device|automatic>")
     print("  voice-input <local-command>")
     print("  voice-input-clear")
     print("  actions-status")
@@ -228,6 +229,22 @@ def main() -> None:
                         "Listening duration set to "
                         f"{app.voice.status()['listen_seconds']} seconds."
                     )
+                continue
+
+            if raw.startswith("voice-recognition "):
+                mode = raw[len("voice-recognition "):].strip().lower()
+                try:
+                    app.voice.set_recognition_mode(mode)
+                except ValueError as exc:
+                    print(f"Invalid recognition mode: {exc}")
+                else:
+                    if mode == "automatic":
+                        print(
+                            "Apple-assisted recognition enabled. Speech may "
+                            "be sent to Apple for processing."
+                        )
+                    else:
+                        print("Private on-device recognition enabled.")
                 continue
 
             if raw.startswith("voice-input "):

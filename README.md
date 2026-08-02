@@ -148,6 +148,7 @@ Continue our PC upgrade discussion.
 | `voice-setup` | Build and verify Nova's signed native microphone helper |
 | `voice-locale <locale>` | Set recognition language, such as `en-US` or `sv-SE` |
 | `voice-duration <seconds>` | Set one-shot listening time from 2–20 seconds |
+| `voice-recognition <on-device\|automatic>` | Choose private local or Apple-assisted recognition |
 | `voice-input <local-command>` | Configure a local command that prints one transcript |
 | `voice-input-clear` | Remove the configured transcription command |
 | `actions-status` | Show action permissions and pending confirmation |
@@ -174,6 +175,7 @@ Set it up once, choose a language if needed, and listen:
 voice-setup
 voice-locale en-US
 voice-duration 7
+voice-recognition on-device
 listen
 ```
 
@@ -183,6 +185,12 @@ Ollama. Nova records only the resulting transcript in its normal conversation
 history. If the built-in provider is unavailable, `voice-input` can still select
 a trusted local command. That command is stored as an argument list and executed
 directly without a shell.
+
+If on-device recognition cannot understand the microphone audio, use
+`voice-recognition automatic` to match macOS Dictation behavior. In automatic
+mode, Apple decides whether recognition runs locally or on its servers, so
+speech audio may be sent to Apple for processing. Return to private local
+recognition with `voice-recognition on-device`.
 
 If you previously configured `voice-input`, run `voice-input-clear` to return to
 Nova's built-in on-device provider.
