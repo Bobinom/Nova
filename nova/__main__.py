@@ -117,6 +117,9 @@ def main() -> None:
     print("  voice-auto <on|off>")
     print("  say <text>")
     print("  listen")
+    print("  voice-setup")
+    print("  voice-locale <locale>")
+    print("  voice-duration <seconds>")
     print("  voice-input <local-command>")
     print("  voice-input-clear")
     print("  actions-status")
@@ -179,6 +182,7 @@ def main() -> None:
                 continue
 
             if raw == "listen":
+                print("Listening...")
                 try:
                     result = app.listen_and_respond()
                 except (OSError, RuntimeError, ValueError) as exc:
@@ -186,6 +190,44 @@ def main() -> None:
                 else:
                     print(f"You: {result['transcript']}")
                     print(f"Nova: {result['response']}")
+                continue
+
+            if raw == "voice-setup":
+                try:
+                    setup = app.voice.setup_input()
+                except (OSError, RuntimeError, ValueError) as exc:
+                    print(f"Voice setup failed: {exc}")
+                else:
+                    print(
+                        "Built-in microphone input is ready for "
+                        f"{setup['locale']}."
+                    )
+                    print(
+                        "The first listen will request Microphone and "
+                        "Speech Recognition permission."
+                    )
+                continue
+
+            if raw.startswith("voice-locale "):
+                locale = raw[len("voice-locale "):].strip()
+                try:
+                    app.voice.set_locale(locale)
+                except ValueError as exc:
+                    print(f"Invalid locale: {exc}")
+                else:
+                    print(f"Voice recognition locale set to {locale}.")
+                continue
+
+            if raw.startswith("voice-duration "):
+                value = raw[len("voice-duration "):].strip()
+                if not value.isdigit():
+                    print("Use: voice-duration <seconds>")
+                else:
+                    app.voice.set_duration(int(value))
+                    print(
+                        "Listening duration set to "
+                        f"{app.voice.status()['listen_seconds']} seconds."
+                    )
                 continue
 
             if raw.startswith("voice-input "):

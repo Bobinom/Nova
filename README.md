@@ -1,4 +1,4 @@
-# Nova 6.0
+# Nova 6.1
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -22,7 +22,9 @@ episodic memory.
 - Persistent multi-topic conversation sessions with compact summaries
 - Versioned database migrations, startup integrity checks, and corruption quarantine
 - Native macOS speech output with optional automatic spoken responses
-- Pluggable local microphone transcription without cloud audio storage
+- Built-in on-device macOS microphone transcription with native permissions
+- Configurable recognition language and listening duration
+- Optional pluggable local transcription command fallback
 - Confirm-before-execution app and website actions with persistent permissions
 - Persistent local SQLite storage
 
@@ -30,6 +32,7 @@ episodic memory.
 
 - macOS
 - Python 3.12
+- Apple Command Line Tools (`xcode-select --install`) for built-in microphone setup
 - [Ollama](https://ollama.com/) with the `llama3.2` model
 
 Install the Ollama model once:
@@ -142,6 +145,9 @@ Continue our PC upgrade discussion.
 | `voice-auto <on\|off>` | Speak Nova's responses automatically |
 | `say <text>` | Speak text immediately with macOS `say` |
 | `listen` | Capture one local transcript and send it to Nova |
+| `voice-setup` | Build and verify Nova's signed native microphone helper |
+| `voice-locale <locale>` | Set recognition language, such as `en-US` or `sv-SE` |
+| `voice-duration <seconds>` | Set one-shot listening time from 2–20 seconds |
 | `voice-input <local-command>` | Configure a local command that prints one transcript |
 | `voice-input-clear` | Remove the configured transcription command |
 | `actions-status` | Show action permissions and pending confirmation |
@@ -160,17 +166,26 @@ say Nova voice is ready
 ```
 
 Nova uses the built-in macOS `say` command, so speech output needs no cloud
-service or additional Python package. Microphone transcription is provider-based:
-configure a trusted local executable that records one utterance and prints only
-its transcript, then use `listen`:
+service or additional Python package. Nova 6.1 also builds a small signed helper
+that uses Apple's Speech and AVFoundation frameworks for on-device transcription.
+Set it up once, choose a language if needed, and listen:
 
 ```text
-voice-input /absolute/path/to/local-transcriber --once
+voice-setup
+voice-locale en-US
+voice-duration 7
 listen
 ```
 
-The command is stored as an argument list and executed directly without a shell.
-Audio handling belongs entirely to the configured local provider.
+The first `listen` asks macOS for Microphone and Speech Recognition permission.
+Audio is processed through Apple's on-device recognizer and is not sent to
+Ollama. Nova records only the resulting transcript in its normal conversation
+history. If the built-in provider is unavailable, `voice-input` can still select
+a trusted local command. That command is stored as an argument list and executed
+directly without a shell.
+
+If you previously configured `voice-input`, run `voice-input-clear` to return to
+Nova's built-in on-device provider.
 
 Computer actions are deliberately narrow. Nova can open an allowlisted macOS app
 such as Safari, Notes, Calendar, Finder, or System Settings. Website opening is
@@ -205,6 +220,7 @@ Nova: Done. I opened Safari.
 - Startup checks database integrity before opening long-lived connections.
 - Corrupted databases are preserved under `~/.nova4/recoveries/` before Nova creates a healthy replacement.
 - Voice output stays local through macOS; Nova does not upload microphone audio.
+- Built-in transcription requires an installed Apple on-device language model.
 - Actions are disabled by default, never invoke a shell, and never execute before explicit confirmation.
 - Website actions are disabled by default and accept only HTTP or HTTPS URLs.
 
@@ -224,5 +240,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.0 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 6.1 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
