@@ -1,4 +1,4 @@
-# Nova 6.4
+# Nova 6.5
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -28,7 +28,7 @@ episodic memory.
 - Configurable wake phrase that ignores background speech until activated
 - Opt-in live weather and sourced factual lookup with offline-safe failures
 - Optional pluggable local transcription command fallback
-- Confirm-before-execution app and website actions with persistent permissions
+- Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
 - Persistent local SQLite storage
 
 ## Requirements
@@ -255,10 +255,11 @@ Input**, select the microphone you are actually using, and confirm that its
 input-level meter moves while you speak. Connected AirPods or Bluetooth headsets
 can become the default input even when you intend to use the Mac's microphone.
 
-Computer actions are deliberately narrow. Nova can open an allowlisted macOS app
-such as Safari, Notes, Calendar, Finder, or System Settings. Website opening is
-off by default. Actions themselves are also off until explicitly enabled, and
-every recognized action requires a separate confirmation:
+Computer actions are deliberately narrow. Nova can open an allowlisted macOS app,
+open an existing file or folder, create a note, reminder, or calendar event, and
+perform a browser search. Website opening and browser searches are off by default.
+Actions themselves are also off until explicitly enabled, and every recognized
+action requires a separate confirmation:
 
 ```text
 nova> actions-on
@@ -268,6 +269,21 @@ Nova: Confirm action: open Safari? Reply yes or no.
 nova> yes
 Nova: Done. I opened Safari.
 ```
+
+Examples of expanded actions:
+
+```text
+Create a note called Shopping saying Buy milk
+Remind me to check Nova tomorrow at 9 am
+Create calendar event Nova demo tomorrow at 3 pm for 30 minutes
+Open file ~/Projects/Nova/README.md
+Search the web for Nova AI assistant
+```
+
+Dates use `today`, `tomorrow`, or `on YYYY-MM-DD`; times support 12-hour or
+24-hour input. Reminders without a date are also supported. Browser searches
+require `action-websites on`. macOS may ask for Automation access the first time
+Nova creates a note, reminder, or calendar event.
 
 ## Privacy
 
@@ -291,7 +307,9 @@ Nova: Done. I opened Safari.
   processing local; automatic recognition may send speech to Apple.
 - Live information is disabled by default and uses only fixed provider endpoints.
 - Actions are disabled by default, never invoke a shell, and never execute before explicit confirmation.
-- Website actions are disabled by default and accept only HTTP or HTTPS URLs.
+- Note and schedule text is passed to fixed AppleScript programs only as data arguments.
+- File and folder actions require an existing path before execution.
+- Website actions and browser searches are disabled by default; URLs accept only HTTP or HTTPS.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -309,5 +327,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.4 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 6.5 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
