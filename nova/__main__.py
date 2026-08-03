@@ -3,6 +3,7 @@ from pathlib import Path
 
 from nova import __version__
 from nova.app import NovaApplication
+from nova.voice.conversation import HandsFreeConversation
 
 
 def _print_memories(app: NovaApplication, category: str | None = None) -> None:
@@ -74,6 +75,24 @@ def _print_sessions(app: NovaApplication) -> None:
         )
 
 
+def _run_hands_free_conversation(app: NovaApplication) -> None:
+    session = HandsFreeConversation(app.voice, app.handle_message)
+    print(
+        "Hands-free conversation started. Say 'Nova, stop' or press "
+        "Ctrl+C to finish."
+    )
+    reason = session.run(
+        on_listening=lambda: print("Listening..."),
+        on_transcript=lambda text: print(f"You: {text}"),
+        on_response=lambda text: print(f"Nova: {text}"),
+        on_error=lambda text: print(f"Hands-free error: {text}"),
+    )
+    if reason == "interrupted":
+        print("Hands-free conversation interrupted.")
+    else:
+        print("Hands-free conversation stopped.")
+
+
 def main() -> None:
     app = NovaApplication()
     app.start()
@@ -117,6 +136,7 @@ def main() -> None:
     print("  voice-auto <on|off>")
     print("  say <text>")
     print("  listen")
+    print("  conversation-on")
     print("  voice-setup")
     print("  voice-locale <locale>")
     print("  voice-duration <seconds>")
@@ -191,6 +211,13 @@ def main() -> None:
                 else:
                     print(f"You: {result['transcript']}")
                     print(f"Nova: {result['response']}")
+                continue
+
+            if raw == "conversation-on":
+                if not app.voice.status()["enabled"]:
+                    print("Voice mode is disabled. Use voice-on first.")
+                else:
+                    _run_hands_free_conversation(app)
                 continue
 
             if raw == "voice-setup":

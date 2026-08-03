@@ -1,4 +1,4 @@
-# Nova 6.1
+# Nova 6.2
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -24,6 +24,7 @@ episodic memory.
 - Native macOS speech output with optional automatic spoken responses
 - Built-in on-device macOS microphone transcription with native permissions
 - Configurable recognition language and listening duration
+- Hands-free listen, respond, and continue mode with spoken stop control
 - Optional pluggable local transcription command fallback
 - Confirm-before-execution app and website actions with persistent permissions
 - Persistent local SQLite storage
@@ -145,6 +146,7 @@ Continue our PC upgrade discussion.
 | `voice-auto <on\|off>` | Speak Nova's responses automatically |
 | `say <text>` | Speak text immediately with macOS `say` |
 | `listen` | Capture one local transcript and send it to Nova |
+| `conversation-on` | Start hands-free voice conversation until spoken stop or Ctrl+C |
 | `voice-setup` | Build and verify Nova's signed native microphone helper |
 | `voice-locale <locale>` | Set recognition language, such as `en-US` or `sv-SE` |
 | `voice-duration <seconds>` | Set one-shot listening time from 2–20 seconds |
@@ -167,7 +169,7 @@ say Nova voice is ready
 ```
 
 Nova uses the built-in macOS `say` command, so speech output needs no cloud
-service or additional Python package. Nova 6.1 also builds a small signed helper
+service or additional Python package. Nova 6.2 also builds a small signed helper
 that uses Apple's Speech and AVFoundation frameworks for on-device transcription.
 Set it up once, choose a language if needed, and listen:
 
@@ -191,6 +193,19 @@ If on-device recognition cannot understand the microphone audio, use
 mode, Apple decides whether recognition runs locally or on its servers, so
 speech audio may be sent to Apple for processing. Return to private local
 recognition with `voice-recognition on-device`.
+
+For a continuous spoken conversation, enable voice and start hands-free mode:
+
+```text
+voice-on
+conversation-on
+```
+
+Nova repeatedly listens, answers aloud, and listens again. Say `Nova, stop` to
+return to the normal prompt, or press `Ctrl+C` to interrupt hands-free mode.
+Temporary recognition failures are reported and the session continues. Spoken
+action requests still use Nova's existing confirmation requirement; answer
+`yes` or `no` during the next listening turn.
 
 If you previously configured `voice-input`, run `voice-input-clear` to return to
 Nova's built-in on-device provider.
@@ -253,5 +268,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.1 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 6.2 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
