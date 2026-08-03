@@ -276,11 +276,29 @@ class LiveInformationService:
         )
         if explicit:
             return explicit.group(1).strip()
-        if re.match(r"^how many people (?:live|are) in\s+.+$", cleaned, re.I):
+        if LiveInformationService._is_population_query(cleaned):
             return cleaned
         if re.search(r"\b(?:current|latest|today|right now)\b", cleaned, re.I):
             return cleaned
         return None
+
+    @staticmethod
+    def _is_population_query(text: str) -> bool:
+        match = re.match(
+            r"^how many people (?:live|are) in\s+(.+)$",
+            text,
+            re.I,
+        )
+        if match is None:
+            return False
+        location = match.group(1).strip().lower()
+        if re.search(r"\b(?:if|when|given that|assuming)\b", location):
+            return False
+        if re.match(r"^(?:a|an)\s+", location):
+            return False
+        if re.search(r"\b(?:house|home|room|family|car|bus)\b", location):
+            return False
+        return True
 
     @staticmethod
     def _weather_description(code: Any) -> str:

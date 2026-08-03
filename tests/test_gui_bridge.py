@@ -82,6 +82,20 @@ class FakeVoice(FakeStatus):
             "message": "Microphone and speech recognition are ready.",
         }
 
+    def configure_elevenlabs(self, voice_id, api_key=""):
+        self.value["output_provider"] = "elevenlabs"
+        self.value["elevenlabs_voice_id"] = voice_id
+        self.value["elevenlabs_configured"] = bool(api_key)
+
+    def set_output_provider(self, provider):
+        self.value["output_provider"] = provider
+
+    def test_output(self):
+        return {
+            "spoken": True,
+            "provider": self.value.get("output_provider", "macos"),
+        }
+
 
 class FakeApp:
     def __init__(self):
@@ -218,6 +232,31 @@ class GUIBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["available"])
         self.assertIn("ready", result["message"].lower())
+
+    def test_bridge_configures_elevenlabs_without_returning_api_key(self):
+        response = NovaGUIBridge(FakeApp()).process({
+            "command": "configure_elevenlabs",
+            "voice_id": "GmM3ucvssIf0NWKHkiyc",
+            "api_key": "secret-api-key",
+        })
+
+        voice = response["result"]["voice"]
+        self.assertEqual(voice["output_provider"], "elevenlabs")
+        self.assertEqual(
+            voice["elevenlabs_voice_id"],
+            "GmM3ucvssIf0NWKHkiyc",
+        )
+        self.assertNotIn("secret-api-key", str(response))
+
+    def test_bridge_switches_and_tests_voice_provider(self):
+        app = FakeApp()
+        bridge = NovaGUIBridge(app)
+
+        bridge.process({"command": "set_voice_provider", "provider": "macos"})
+        result = bridge.process({"command": "test_voice"})["result"]
+
+        self.assertTrue(result["spoken"])
+        self.assertEqual(result["provider"], "macos")
 
 
 if __name__ == "__main__":

@@ -59,6 +59,27 @@ class LiveInformationTests(unittest.TestCase):
             self.assertEqual(service.process("Tell me a joke"), {"handled": False})
             self.assertEqual(http.calls, [])
 
+    def test_hypothetical_family_count_does_not_use_population_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, http = self.make_service(Path(directory))
+            service.set_enabled(True)
+
+            result = service.process(
+                "How many people live in a house if there's two sons, "
+                "one daughter and the parents?"
+            )
+
+            self.assertEqual(result, {"handled": False})
+            self.assertEqual(http.calls, [])
+
+    def test_real_population_question_still_uses_live_search(self):
+        self.assertEqual(
+            LiveInformationService._search_query(
+                "How many people live in Sweden?"
+            ),
+            "How many people live in Sweden",
+        )
+
     def test_weather_uses_fixed_open_meteo_endpoints_and_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             service, http = self.make_service(Path(directory), [

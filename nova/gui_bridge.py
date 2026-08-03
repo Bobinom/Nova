@@ -60,6 +60,17 @@ class NovaGUIBridge:
             response["result"] = {"spoken": self.app.voice.speak(text)}
         elif command == "voice_setup":
             response["result"] = self.app.voice.setup_input()
+        elif command == "configure_elevenlabs":
+            voice_id = str(request.get("voice_id", "")).strip()
+            api_key = str(request.get("api_key", "")).strip()
+            self.app.voice.configure_elevenlabs(voice_id, api_key)
+            response["result"] = self._dashboard()
+        elif command == "set_voice_provider":
+            provider = str(request.get("provider", "")).strip()
+            self.app.voice.set_output_provider(provider)
+            response["result"] = self._dashboard()
+        elif command == "test_voice":
+            response["result"] = self.app.voice.test_output()
         elif command == "dashboard":
             response["result"] = self._dashboard()
         elif command == "set_preference":

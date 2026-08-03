@@ -1,4 +1,4 @@
-# Nova 7.5
+# Nova 7.6
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -36,6 +36,8 @@ episodic memory.
 - Standalone Apple-silicon macOS app with Nova Core and Python dependencies
   embedded inside the bundle
 - Drag-to-Applications DMG installer and native Nova orb app icon
+- Optional ElevenLabs custom voice with macOS Keychain credential storage,
+  in-app testing, provider switching, and offline macOS fallback
 - Floating Glass native interface with an animated, transparent Nova orb
 - Functional Voice, Chat/History, and Settings navigation
 - Native controls for voice, spoken replies, memory privacy, live information,
@@ -117,7 +119,7 @@ To create the drag-to-Applications installer:
 ./scripts/build_macos_dmg.sh
 ```
 
-Open `dist/Nova-7.5.0.dmg`, then drag Nova into Applications. These local builds
+Open the versioned DMG under `dist/`, then drag Nova into Applications. These local builds
 are ad-hoc signed for development; public distribution will require an Apple
 Developer ID signature and notarization.
 
@@ -146,9 +148,9 @@ The Google Calendar card reads only Google or Google Workspace calendars already
 connected under **System Settings > Internet Accounts**. Click the card once to
 grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
 
-### Nova 7.5 interface
+### Nova 7.6 interface
 
-Nova 7.5 retains the Floating Glass design with an atmospheric indigo
+Nova 7.6 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
 cyan rings while listening, and displays a moving purple/cyan waveform while
@@ -159,6 +161,18 @@ confirmed actions, and launch at login.
 The app is now self-contained: its SwiftUI interface starts a frozen Nova Core
 from inside the application bundle. You can move Nova into Applications or run
 it from the DMG without keeping the repository beside it.
+
+### ElevenLabs custom voice
+
+Open **Settings > Voice**, select **ElevenLabs custom voice**, and enter your
+Voice ID and API key. Nova stores the API key in macOS Keychain; it is never
+written to `settings.json`, SQLite, Git, or diagnostic responses. Use **Test
+voice** to hear a preview. If ElevenLabs is unavailable, normal spoken responses
+fall back automatically to the built-in macOS voice.
+
+ElevenLabs speech requires an internet connection, sends the response text to
+ElevenLabs for synthesis, and may consume paid account credits. Switch **Voice
+output** back to **Built-in macOS** for fully local speech.
 
 The navigation rail opens Voice, Chat with persisted conversation history, and
 Settings. Settings provides native switches for voice mode, automatic spoken

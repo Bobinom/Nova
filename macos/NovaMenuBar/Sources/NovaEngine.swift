@@ -32,6 +32,9 @@ struct DashboardStatus {
     var voiceLocale = "en-US"
     var listenSeconds = 7
     var recognitionMode = "on-device"
+    var outputProvider = "macos"
+    var elevenLabsConfigured = false
+    var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
 }
 
 struct WeatherStatus {
@@ -75,6 +78,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var dashboard = DashboardStatus()
     @Published private(set) var weather = WeatherStatus()
     @Published private(set) var voiceSetupMessage = ""
+    @Published private(set) var voiceOutputMessage = ""
 
     private var process: Process?
     private var input: FileHandle?
@@ -188,6 +192,30 @@ final class NovaEngine: ObservableObject {
         send(command: "voice_setup")
     }
 
+    func configureElevenLabs(apiKey: String, voiceID: String) {
+        guard state.isReady else {
+            voiceOutputMessage = "Wait for Nova Core to finish starting."
+            return
+        }
+        voiceOutputMessage = "Saving securely in macOS Keychain…"
+        send(
+            command: "configure_elevenlabs",
+            values: ["api_key": apiKey, "voice_id": voiceID]
+        )
+    }
+
+    func setVoiceProvider(_ provider: String) {
+        guard state.isReady else { return }
+        send(command: "set_voice_provider", values: ["provider": provider])
+    }
+
+    func testVoice() {
+        guard state.isReady else { return }
+        voiceOutputMessage = "Generating a voice preview…"
+        state = .speaking
+        send(command: "test_voice")
+    }
+
     func confirmAction() {
         respondToAction("yes")
     }
@@ -255,6 +283,9 @@ final class NovaEngine: ObservableObject {
             } else if command == "voice_setup" {
                 voiceSetupMessage = error
                 state = .ready
+            } else if ["configure_elevenlabs", "set_voice_provider", "test_voice"].contains(command) {
+                voiceOutputMessage = error
+                state = .ready
             } else {
                 messages.append(ChatMessage(role: .system, text: error))
                 state = .ready
@@ -264,12 +295,17 @@ final class NovaEngine: ObservableObject {
         if response["shutdown"] as? Bool == true { return }
 
         switch command {
-        case "dashboard", "set_preference":
+        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider":
             if let result = response["result"] as? [String: Any] {
                 updateDashboard(result)
             }
             if command == "dashboard" {
                 send(command: "history", values: ["limit": 30])
+            }
+            if command == "configure_elevenlabs" {
+                voiceOutputMessage = "ElevenLabs voice saved securely and selected."
+            } else if command == "set_voice_provider" {
+                voiceOutputMessage = "Voice provider updated."
             }
         case "voice_setup":
             if let result = response["result"] as? [String: Any] {
@@ -308,6 +344,14 @@ final class NovaEngine: ObservableObject {
             }
             state = .ready
         case "speak":
+            state = .ready
+        case "test_voice":
+            if let result = response["result"] as? [String: Any],
+               let provider = result["provider"] as? String {
+                voiceOutputMessage = provider == "elevenlabs"
+                    ? "Custom ElevenLabs voice is ready."
+                    : "Built-in macOS voice is ready."
+            }
             state = .ready
         case "message":
             if let result = response["result"] as? [String: Any] {
@@ -372,7 +416,11 @@ final class NovaEngine: ObservableObject {
             ollamaModel: result["ollama_model"] as? String ?? "llama3.2",
             voiceLocale: voice["locale"] as? String ?? "en-US",
             listenSeconds: voice["listen_seconds"] as? Int ?? 7,
-            recognitionMode: voice["recognition_mode"] as? String ?? "on-device"
+            recognitionMode: voice["recognition_mode"] as? String ?? "on-device",
+            outputProvider: voice["output_provider"] as? String ?? "macos",
+            elevenLabsConfigured: voice["elevenlabs_configured"] as? Bool ?? false,
+            elevenLabsVoiceID: voice["elevenlabs_voice_id"] as? String
+                ?? "GmM3ucvssIf0NWKHkiyc"
         )
     }
 }
