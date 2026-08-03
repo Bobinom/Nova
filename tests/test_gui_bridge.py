@@ -76,6 +76,12 @@ class FakeVoice(FakeStatus):
     def set_auto_speak(self, enabled):
         self.value["auto_speak"] = enabled
 
+    def setup_input(self):
+        return {
+            "available": True,
+            "message": "Microphone and speech recognition are ready.",
+        }
+
 
 class FakeApp:
     def __init__(self):
@@ -204,6 +210,14 @@ class GUIBridgeTests(unittest.TestCase):
             "text": result["speech_text"],
         })
         self.assertEqual(app.voice.spoken, ["Hello"])
+
+    def test_voice_setup_uses_native_voice_diagnostics(self):
+        result = NovaGUIBridge(FakeApp()).process({"command": "voice_setup"})[
+            "result"
+        ]
+
+        self.assertTrue(result["available"])
+        self.assertIn("ready", result["message"].lower())
 
 
 if __name__ == "__main__":

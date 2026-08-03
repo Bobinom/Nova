@@ -58,6 +58,8 @@ class NovaGUIBridge:
             if not text:
                 raise ValueError("Speech text is required.")
             response["result"] = {"spoken": self.app.voice.speak(text)}
+        elif command == "voice_setup":
+            response["result"] = self.app.voice.setup_input()
         elif command == "dashboard":
             response["result"] = self._dashboard()
         elif command == "set_preference":

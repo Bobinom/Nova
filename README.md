@@ -1,4 +1,4 @@
-# Nova 7.3
+# Nova 7.4
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -31,6 +31,8 @@ episodic memory.
 - Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
 - Native SwiftUI chat window and macOS menu-bar app connected to the same Nova core
 - Global Option-Space quick access and optional launch at login
+- Guided first-launch setup for Nova Core, voice permissions, Google Calendar,
+  privacy, computer actions, and launch at login
 - Floating Glass native interface with an animated, transparent Nova orb
 - Functional Voice, Chat/History, and Settings navigation
 - Native controls for voice, spoken replies, memory privacy, live information,
@@ -99,6 +101,9 @@ open dist/Nova.app
 ```
 
 Nova appears as a sparkles icon in the menu bar and opens a native chat window.
+The first launch opens a guided setup that checks Nova Core and lets you choose
+voice, calendar, privacy, action, and login preferences. Optional permissions
+can be skipped, and the guide can be reopened from **Settings > Setup**.
 Closing the window hides it without stopping Nova. Press `Option-Space` from any
 app to bring the chat back immediately, or choose **Open Nova** from the menu.
 Enable **Launch at Login** there to start Nova automatically when you sign in.
@@ -121,13 +126,15 @@ The Google Calendar card reads only Google or Google Workspace calendars already
 connected under **System Settings > Internet Accounts**. Click the card once to
 grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
 
-### Nova 7.3 interface
+### Nova 7.4 interface
 
-Nova 7.3 gives the native app a Floating Glass design with an atmospheric indigo
+Nova 7.4 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
 cyan rings while listening, and displays a moving purple/cyan waveform while
-Nova is speaking.
+Nova is speaking. A matching five-step setup guide now helps new users configure
+the local engine, microphone and speech recognition, Google Calendar, privacy,
+confirmed actions, and launch at login.
 
 The navigation rail opens Voice, Chat with persisted conversation history, and
 Settings. Settings provides native switches for voice mode, automatic spoken

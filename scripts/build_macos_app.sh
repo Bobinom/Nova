@@ -37,6 +37,7 @@ xcrun swiftc \
     "$SOURCE_DIR/LoginItemManager.swift" \
     "$SOURCE_DIR/SystemMonitor.swift" \
     "$SOURCE_DIR/CalendarModel.swift" \
+    "$SOURCE_DIR/OnboardingView.swift" \
     "$SOURCE_DIR/ContentView.swift" \
     "$SOURCE_DIR/NovaMenuBarApp.swift"
 
