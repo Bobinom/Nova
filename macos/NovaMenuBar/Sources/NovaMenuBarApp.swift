@@ -5,6 +5,7 @@ import SwiftUI
 struct NovaMenuBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var engine = NovaEngine()
+    @StateObject private var loginItem = LoginItemManager()
 
     var body: some Scene {
         WindowGroup("Nova", id: "chat") {
@@ -13,22 +14,32 @@ struct NovaMenuBarApp: App {
         .defaultSize(width: 620, height: 640)
 
         MenuBarExtra("Nova", systemImage: "sparkles") {
-            NovaMenu(engine: engine)
+            NovaMenu(engine: engine, loginItem: loginItem)
         }
     }
 }
 
 private struct NovaMenu: View {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var engine: NovaEngine
+    @ObservedObject var loginItem: LoginItemManager
 
     var body: some View {
         Button("Open Nova") {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "chat")
+            WindowCoordinator.shared.show()
         }
+        .keyboardShortcut(.space, modifiers: .option)
         Divider()
         Label(engine.state.label, systemImage: engine.state.isReady ? "checkmark.circle" : "circle.dotted")
+        Toggle(
+            "Launch at Login",
+            isOn: Binding(
+                get: { loginItem.enabled },
+                set: { loginItem.setEnabled($0) }
+            )
+        )
+        if let error = loginItem.errorMessage {
+            Text(error)
+        }
         Divider()
         Button("Quit Nova") {
             engine.stop()
@@ -39,6 +50,16 @@ private struct NovaMenu: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let hotKey = GlobalHotKey()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        hotKey.register()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hotKey.unregister()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

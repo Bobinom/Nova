@@ -1,4 +1,4 @@
-# Nova 7.0
+# Nova 7.1
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -30,6 +30,7 @@ episodic memory.
 - Optional pluggable local transcription command fallback
 - Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
 - Native SwiftUI chat window and macOS menu-bar app connected to the same Nova core
+- Global Option-Space quick access and optional launch at login
 - Persistent local SQLite storage
 
 ## Requirements
@@ -89,8 +90,10 @@ open dist/Nova.app
 ```
 
 Nova appears as a sparkles icon in the menu bar and opens a native chat window.
-Closing the window keeps Nova available from the menu bar; choose **Quit Nova**
-to stop both the interface and its Python engine. The app uses the existing
+Closing the window hides it without stopping Nova. Press `Option-Space` from any
+app to bring the chat back immediately, or choose **Open Nova** from the menu.
+Enable **Launch at Login** there to start Nova automatically when you sign in.
+Choose **Quit Nova** to stop both the interface and its Python engine. The app uses the existing
 `.venv`, Ollama connection, `~/.nova4` data, memory, permissions, and actions.
 The terminal launcher remains available and unchanged.
 
@@ -349,5 +352,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 7.0 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 7.1 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
