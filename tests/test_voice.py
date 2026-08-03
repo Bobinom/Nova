@@ -153,6 +153,18 @@ class VoiceServiceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service.set_wake_phrase("this phrase has too many words")
 
+    def test_wake_mode_is_opt_in_and_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            service, _ = self.make_service(root)
+
+            self.assertFalse(service.status()["wake_enabled"])
+            service.set_wake_enabled(True)
+
+            reloaded = SettingsManager(root / "settings.json")
+            reloaded.load()
+            self.assertTrue(reloaded.get("voice.wake_enabled"))
+
     def test_application_can_listen_respond_and_speak(self):
         with tempfile.TemporaryDirectory() as directory:
             app = NovaApplication(base_dir=Path(directory))

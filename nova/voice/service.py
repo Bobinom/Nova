@@ -271,6 +271,9 @@ class VoiceService:
             "listen_seconds": self._duration(),
             "recognition_mode": self._recognition_mode(),
             "wake_phrase": self._wake_phrase(),
+            "wake_enabled": bool(
+                self.settings.get("voice.wake_enabled", False)
+            ),
             "voice": self.settings.get("voice.name", None),
             "rate": self._rate(),
         }
@@ -280,6 +283,9 @@ class VoiceService:
 
     def set_auto_speak(self, enabled: bool) -> None:
         self.settings.set("voice.auto_speak", enabled)
+
+    def set_wake_enabled(self, enabled: bool) -> None:
+        self.settings.set("voice.wake_enabled", enabled)
 
     def set_output_provider(self, provider: str) -> None:
         cleaned = provider.strip().lower()

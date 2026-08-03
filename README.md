@@ -1,4 +1,4 @@
-# Nova 7.6
+# Nova 7.7
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -38,6 +38,8 @@ episodic memory.
 - Drag-to-Applications DMG installer and native Nova orb app icon
 - Optional ElevenLabs custom voice with macOS Keychain credential storage,
   in-app testing, provider switching, and offline macOS fallback
+- Hands-free wake-phrase mode in the standalone app with menu-bar controls,
+  visible microphone state, spoken sleep control, and self-listening prevention
 - Floating Glass native interface with an animated, transparent Nova orb
 - Functional Voice, Chat/History, and Settings navigation
 - Native controls for voice, spoken replies, memory privacy, live information,
@@ -148,9 +150,9 @@ The Google Calendar card reads only Google or Google Workspace calendars already
 connected under **System Settings > Internet Accounts**. Click the card once to
 grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
 
-### Nova 7.6 interface
+### Nova 7.7 interface
 
-Nova 7.6 retains the Floating Glass design with an atmospheric indigo
+Nova 7.7 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
 cyan rings while listening, and displays a moving purple/cyan waveform while
@@ -173,6 +175,19 @@ fall back automatically to the built-in macOS voice.
 ElevenLabs speech requires an internet connection, sends the response text to
 ElevenLabs for synthesis, and may consume paid account credits. Switch **Voice
 output** back to **Built-in macOS** for fully local speech.
+
+### Hands-free app mode
+
+Open **Settings > Voice** and enable **Hands-free wake phrase**, or use the same
+toggle in Nova's menu-bar menu. Nova listens in short recognition windows for
+the configured phrase (for example, "Hey Nova") while leaving chat and Settings
+responsive. Say the phrase followed by a request, or say only the phrase and
+wait for Nova to answer "Yes?" before continuing.
+
+Say **"Hey Nova, go to sleep"** to disable persistent listening. Nova pauses the
+microphone while it thinks and speaks, so it cannot activate itself from its own
+ElevenLabs or macOS voice. Raw microphone audio is not saved; recognition uses
+the configured on-device or automatic Apple Speech mode.
 
 The navigation rail opens Voice, Chat with persisted conversation history, and
 Settings. Settings provides native switches for voice mode, automatic spoken
