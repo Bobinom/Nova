@@ -12,12 +12,27 @@ struct ChatMessage: Identifiable {
     }
 }
 
+struct PendingAction {
+    let description: String
+    let target: String
+}
+
+struct DashboardStatus {
+    var version = ""
+    var memories = 0
+    var voiceReady = false
+    var actionsEnabled = false
+    var liveInformationEnabled = false
+    var databaseHealthy = false
+}
+
 @MainActor
 final class NovaEngine: ObservableObject {
     enum State: Equatable {
         case starting
         case ready
         case thinking
+        case listening
         case unavailable(String)
 
         var label: String {
@@ -25,19 +40,28 @@ final class NovaEngine: ObservableObject {
             case .starting: return "Starting"
             case .ready: return "Ready"
             case .thinking: return "Thinking"
+            case .listening: return "Listening"
             case .unavailable: return "Unavailable"
             }
         }
 
         var isReady: Bool { self == .ready }
+
+        var isAvailable: Bool {
+            if case .unavailable = self { return false }
+            return true
+        }
     }
 
     @Published private(set) var state: State = .starting
     @Published private(set) var messages: [ChatMessage] = []
+    @Published private(set) var pendingAction: PendingAction?
+    @Published private(set) var dashboard = DashboardStatus()
 
     private var process: Process?
     private var input: FileHandle?
     private var outputBuffer = Data()
+    private var pendingCommands: [String: String] = [:]
 
     init() {
         start()
@@ -84,7 +108,9 @@ final class NovaEngine: ObservableObject {
                 return
             }
             Task { @MainActor in
-                self?.state = .unavailable(message.trimmingCharacters(in: .whitespacesAndNewlines))
+                self?.state = .unavailable(
+                    message.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
             }
         }
         task.terminationHandler = { [weak self] _ in
@@ -101,7 +127,7 @@ final class NovaEngine: ObservableObject {
             try task.run()
             process = task
             input = inputPipe.fileHandleForWriting
-            send(command: "status")
+            send(command: "dashboard")
         } catch {
             state = .unavailable(error.localizedDescription)
         }
@@ -112,13 +138,33 @@ final class NovaEngine: ObservableObject {
         guard !cleaned.isEmpty, state.isReady else { return }
         messages.append(ChatMessage(role: .user, text: cleaned))
         state = .thinking
-        send(command: "message", text: cleaned)
+        send(command: "message", values: ["text": cleaned])
+    }
+
+    func listen() {
+        guard state.isReady else { return }
+        state = .listening
+        send(command: "listen")
+    }
+
+    func confirmAction() {
+        respondToAction("yes")
+    }
+
+    func cancelAction() {
+        respondToAction("no")
     }
 
     func stop() {
         guard process != nil else { return }
         send(command: "shutdown")
         input?.closeFile()
+    }
+
+    private func respondToAction(_ response: String) {
+        guard pendingAction != nil, state.isReady else { return }
+        state = .thinking
+        send(command: "message", values: ["text": response])
     }
 
     private func repositoryPath() -> String? {
@@ -129,13 +175,13 @@ final class NovaEngine: ObservableObject {
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func send(command: String, text: String? = nil) {
+    private func send(command: String, values: [String: Any] = [:]) {
         guard let input else { return }
-        var payload: [String: Any] = [
-            "id": UUID().uuidString,
-            "command": command,
-        ]
-        if let text { payload["text"] = text }
+        let id = UUID().uuidString
+        var payload = values
+        payload["id"] = id
+        payload["command"] = command
+        pendingCommands[id] = command
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               var line = String(data: data, encoding: .utf8) else { return }
         line.append("\n")
@@ -156,19 +202,87 @@ final class NovaEngine: ObservableObject {
     }
 
     private func handle(_ response: [String: Any]) {
+        let id = response["id"] as? String ?? ""
+        let command = pendingCommands.removeValue(forKey: id) ?? ""
         guard response["ok"] as? Bool == true else {
             let error = response["error"] as? String ?? "Unknown bridge error"
-            state = .unavailable(error)
+            if command == "dashboard" {
+                state = .unavailable(error)
+            } else {
+                messages.append(ChatMessage(role: .system, text: error))
+                state = .ready
+            }
             return
         }
         if response["shutdown"] as? Bool == true { return }
-        guard let result = response["result"] as? [String: Any] else {
+
+        switch command {
+        case "dashboard":
+            if let result = response["result"] as? [String: Any] {
+                updateDashboard(result)
+            }
+            send(command: "history", values: ["limit": 30])
+        case "history":
+            if let turns = response["result"] as? [[String: Any]] {
+                messages = turns.compactMap { turn in
+                    guard let text = turn["text"] as? String,
+                          let role = turn["role"] as? String else { return nil }
+                    return ChatMessage(
+                        role: role == "user" ? .user : .nova,
+                        text: text
+                    )
+                }
+            }
             state = .ready
-            return
+        case "listen":
+            if let result = response["result"] as? [String: Any] {
+                if let transcript = result["transcript"] as? String {
+                    messages.append(ChatMessage(role: .user, text: transcript))
+                }
+                applyConversationResult(result)
+            }
+            state = .ready
+        case "message":
+            if let result = response["result"] as? [String: Any] {
+                applyConversationResult(result)
+            }
+            state = .ready
+        default:
+            state = .ready
         }
+    }
+
+    private func applyConversationResult(_ result: [String: Any]) {
         if let reply = result["response"] as? String {
             messages.append(ChatMessage(role: .nova, text: reply))
         }
-        state = .ready
+        if result["action_status"] as? String == "pending_confirmation",
+           let action = result["action"] as? [String: Any] {
+            pendingAction = PendingAction(
+                description: action["description"] as? String ?? "Confirm action",
+                target: action["target"] as? String ?? "Nova action"
+            )
+        } else if result["action_status"] != nil {
+            pendingAction = nil
+        }
+    }
+
+    private func updateDashboard(_ result: [String: Any]) {
+        let status = result["status"] as? [String: Any] ?? [:]
+        let voice = result["voice"] as? [String: Any] ?? [:]
+        let actions = result["actions"] as? [String: Any] ?? [:]
+        let live = result["live_information"] as? [String: Any] ?? [:]
+        dashboard = DashboardStatus(
+            version: status["version"] as? String ?? "",
+            memories: status["memories"] as? Int ?? 0,
+            voiceReady: voice["input_available"] as? Bool ?? false,
+            actionsEnabled: actions["enabled"] as? Bool ?? false,
+            liveInformationEnabled: (
+                live["enabled"] as? Bool
+                ?? live["allow_web_access"] as? Bool
+                ?? false
+            ),
+            databaseHealthy: status["database_status"] as? String == "healthy"
+        )
     }
 }

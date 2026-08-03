@@ -1,4 +1,4 @@
-# Nova 7.1
+# Nova 7.2
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -31,6 +31,10 @@ episodic memory.
 - Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
 - Native SwiftUI chat window and macOS menu-bar app connected to the same Nova core
 - Global Option-Space quick access and optional launch at login
+- Voice-first command center with animated Nova orb and optional restored chat
+- Google Calendar events through calendars connected to macOS Internet Accounts
+- Live local CPU, memory, database, service, and macOS thermal-state dashboard
+- Clickable Confirm and Cancel controls for pending computer actions
 - Persistent local SQLite storage
 
 ## Requirements
@@ -100,6 +104,17 @@ The terminal launcher remains available and unchanged.
 The local bundle records the repository location at build time, so rebuild the
 app after moving the Nova project. Generated app bundles under `dist/` are not
 committed.
+
+The command-center interface starts in Voice mode. Use the microphone button for
+one local transcript or switch to Chat to see recent history and type. Pending
+computer actions appear as a confirmation card with **Confirm** and **Cancel**
+buttons. Dashboard CPU and memory values are sampled locally. Because macOS does
+not provide a safe public Celsius sensor API, Nova reports Apple's honest thermal
+state (`Nominal`, `Warm`, `High`, or `Critical`) instead of inventing a temperature.
+
+The Google Calendar card reads only Google or Google Workspace calendars already
+connected under **System Settings > Internet Accounts**. Click the card once to
+grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
 
 ## Memory examples
 
@@ -335,6 +350,8 @@ Nova creates a note, reminder, or calendar event.
 - File and folder actions require an existing path before execution.
 - Website actions and browser searches are disabled by default; URLs accept only HTTP or HTTPS.
 - The native app communicates with Nova through a local process pipe and does not add a network server.
+- Google calendar events are read locally through macOS EventKit from accounts connected to this Mac.
+- System health sampling stays local and reports macOS thermal state rather than a fabricated temperature.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -352,5 +369,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 7.1 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 7.2 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
