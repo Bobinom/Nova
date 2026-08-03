@@ -120,6 +120,22 @@ class WakePhraseSessionTests(unittest.TestCase):
         self.assertEqual(reason, "interrupted")
         self.assertEqual(errors, ["Microphone disconnected"])
 
+    def test_sourced_result_speaks_without_reading_url(self):
+        voice = RecordingVoice(["Nova weather", "Nova stop"])
+        WakePhraseSession(
+            voice,
+            lambda text: {
+                "response": "Sunny. Source: https://example.test",
+                "spoken_response": "It is sunny.",
+            },
+        ).run(
+            on_activation=lambda text: None,
+            on_transcript=lambda text: None,
+            on_response=lambda text: None,
+            on_error=lambda text: None,
+        )
+        self.assertEqual(voice.spoken[0], ("It is sunny.", True))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ from nova.conversation.repository import ConversationRepository
 from nova.core.settings import SettingsManager
 from nova.llm.prompts import NOVA_SYSTEM_PROMPT
 from nova.llm.service import LLMService
+from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 
 
@@ -58,6 +59,7 @@ class ConversationManager:
         llm: LLMService | None = None,
         settings: SettingsManager | None = None,
         actions: ActionService | None = None,
+        live: LiveInformationService | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
@@ -66,6 +68,7 @@ class ConversationManager:
         self.llm = llm
         self.settings = settings
         self.actions = actions
+        self.live = live
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
@@ -111,7 +114,15 @@ class ConversationManager:
             if action_result.get("handled"):
                 result = action_result
             else:
-                intent = classify(text, self.last_topic)
+                live_result = (
+                    self.live.process(text)
+                    if self.live is not None
+                    else {"handled": False}
+                )
+                if live_result.get("handled"):
+                    result = live_result
+                else:
+                    intent = classify(text, self.last_topic)
         if result is None:
             result = self._execute(intent, text, confirmed=confirmed)
 
@@ -166,6 +177,11 @@ class ConversationManager:
         return {
             "episode_auto_save": self._episode_auto_save_enabled(),
             "confirm_semantic_memory": self._semantic_confirmation_enabled(),
+            "allow_web_access": bool(
+                self.settings.get("privacy.allow_web_access", False)
+                if self.settings is not None
+                else False
+            ),
             "max_episodes": self._privacy_int("max_episodes", 200),
             "retention_days": self._privacy_int("retention_days", 0),
         }

@@ -1,4 +1,4 @@
-# Nova 6.3
+# Nova 6.4
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -26,6 +26,7 @@ episodic memory.
 - Configurable recognition language and listening duration
 - Hands-free listen, respond, and continue mode with spoken stop control
 - Configurable wake phrase that ignores background speech until activated
+- Opt-in live weather and sourced factual lookup with offline-safe failures
 - Optional pluggable local transcription command fallback
 - Confirm-before-execution app and website actions with persistent permissions
 - Persistent local SQLite storage
@@ -133,6 +134,9 @@ Continue our PC upgrade discussion.
 | `dont-save-conversation` | Remove the most recently saved conversation |
 | `forget-last-conversation` | Forget the most recent episode |
 | `privacy-audit` | Summarize locally stored memory and privacy settings |
+| `live-status` | Show web-access permission and fixed information providers |
+| `live-on` / `live-off` | Allow or block queries to approved providers |
+| `web-search <query>` | Search for a sourced factual answer |
 | `export-memory [path]` | Export readable semantic and episodic memory JSON |
 | `backup [path]` | Create and verify a consistent SQLite backup |
 | `restore <backup-path>` | Restore after typed confirmation and create a recovery backup |
@@ -224,6 +228,25 @@ Change the phrase with `wake-phrase Hey Nova`. After an action request, Nova
 accepts the required spoken `yes` or `no` without making you repeat the wake
 phrase.
 
+## Live information
+
+Live information is off by default. Enable it explicitly:
+
+```text
+live-on
+```
+
+Nova can then answer requests such as `What's the weather in Malmö?`, `Look up
+Sweden`, or `How many people live in Sweden?`. Weather uses Open-Meteo. Factual
+lookup uses DuckDuckGo with a Wikipedia fallback. Nova only contacts these fixed
+provider endpoints and prints source links with successful results. Voice modes
+speak the concise answer without reading URLs aloud.
+
+Enabling this feature sends the relevant location or search query to those
+providers. Use `live-off` to block all live requests again. If the providers or
+internet connection are unavailable, Nova reports that clearly instead of
+inventing a current answer.
+
 If you previously configured `voice-input`, run `voice-input-clear` to return to
 Nova's built-in on-device provider.
 
@@ -264,8 +287,9 @@ Nova: Done. I opened Safari.
 - Every restore first creates a timestamped recovery backup of the current database.
 - Startup checks database integrity before opening long-lived connections.
 - Corrupted databases are preserved under `~/.nova4/recoveries/` before Nova creates a healthy replacement.
-- Voice output stays local through macOS; Nova does not upload microphone audio.
-- Built-in transcription requires an installed Apple on-device language model.
+- Voice output stays local through macOS. On-device recognition keeps microphone
+  processing local; automatic recognition may send speech to Apple.
+- Live information is disabled by default and uses only fixed provider endpoints.
 - Actions are disabled by default, never invoke a shell, and never execute before explicit confirmation.
 - Website actions are disabled by default and accept only HTTP or HTTPS URLs.
 
@@ -285,5 +309,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.3 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 6.4 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.

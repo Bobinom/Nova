@@ -17,6 +17,7 @@ from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
 from nova.core.state import StateStore
 from nova.llm.ollama import OllamaService
+from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 from nova.plugins.manager import PluginManager
@@ -60,6 +61,7 @@ class NovaApplication:
         self.data = DataManager(self.paths.database_file, self.paths.data_dir)
         self.database = DatabaseManager(self.paths.database_file, self.paths.data_dir)
         self.actions = ActionService(self.settings)
+        self.live = LiveInformationService(self.settings)
         self.voice = VoiceService(self.settings, data_dir=self.paths.data_dir)
 
         self.events = EventBus(
@@ -90,6 +92,7 @@ class NovaApplication:
             llm=self.llm,
             settings=self.settings,
             actions=self.actions,
+            live=self.live,
         )
 
         self._running = False
@@ -158,7 +161,8 @@ class NovaApplication:
     def handle_message(self, text: str) -> dict[str, Any]:
         result = self.conversation.handle(text)
         try:
-            self.voice.speak_response(str(result["response"]))
+            spoken = result.get("spoken_response", result["response"])
+            self.voice.speak_response(str(spoken))
         except (OSError, RuntimeError, ValueError) as exc:
             self.logger.warning("Voice output failed: %s", exc)
         return result
@@ -190,6 +194,7 @@ class NovaApplication:
             "conversation_episodes": len(self.conversation.episodes(1000)),
             "conversation_sessions": len(self.conversation.sessions(1000)),
             "privacy": self.conversation.privacy_status(),
+            "live_information": self.live.status(),
         }
 
     def export_memory(self, destination: Path | None = None) -> Path:

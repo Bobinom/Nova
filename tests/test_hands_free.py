@@ -112,6 +112,24 @@ class HandsFreeConversationTests(unittest.TestCase):
 
         self.assertEqual(handled, ["Open Safari", "yes"])
 
+    def test_sourced_result_prints_links_but_speaks_concise_answer(self):
+        voice = RecordingVoice(["Weather", "Nova stop"])
+        responses = []
+        HandsFreeConversation(
+            voice,
+            lambda text: {
+                "response": "Sunny. Source: https://example.test",
+                "spoken_response": "It is sunny.",
+            },
+        ).run(
+            on_listening=lambda: None,
+            on_transcript=lambda text: None,
+            on_response=responses.append,
+            on_error=lambda text: None,
+        )
+        self.assertEqual(responses, ["Sunny. Source: https://example.test"])
+        self.assertEqual(voice.spoken[0], ("It is sunny.", True))
+
 
 if __name__ == "__main__":
     unittest.main()
