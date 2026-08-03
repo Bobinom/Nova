@@ -1,4 +1,4 @@
-# Nova 6.5
+# Nova 7.0
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -29,13 +29,15 @@ episodic memory.
 - Opt-in live weather and sourced factual lookup with offline-safe failures
 - Optional pluggable local transcription command fallback
 - Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
+- Native SwiftUI chat window and macOS menu-bar app connected to the same Nova core
 - Persistent local SQLite storage
 
 ## Requirements
 
 - macOS
 - Python 3.12
-- Apple Command Line Tools (`xcode-select --install`) for built-in microphone setup
+- Xcode for building the native Nova app
+- Apple Command Line Tools (`xcode-select --install`) for terminal-only microphone setup
 - [Ollama](https://ollama.com/) with the `llama3.2` model
 
 Install the Ollama model once:
@@ -76,6 +78,25 @@ Then start Nova in another terminal:
 
 The launcher automatically uses `.venv/bin/python` when the virtual
 environment exists. Set `PYTHON_BIN` to override it.
+
+## Start the macOS app
+
+Build the signed local app after installing and opening Xcode once:
+
+```bash
+./scripts/build_macos_app.sh
+open dist/Nova.app
+```
+
+Nova appears as a sparkles icon in the menu bar and opens a native chat window.
+Closing the window keeps Nova available from the menu bar; choose **Quit Nova**
+to stop both the interface and its Python engine. The app uses the existing
+`.venv`, Ollama connection, `~/.nova4` data, memory, permissions, and actions.
+The terminal launcher remains available and unchanged.
+
+The local bundle records the repository location at build time, so rebuild the
+app after moving the Nova project. Generated app bundles under `dist/` are not
+committed.
 
 ## Memory examples
 
@@ -310,6 +331,7 @@ Nova creates a note, reminder, or calendar event.
 - Note and schedule text is passed to fixed AppleScript programs only as data arguments.
 - File and folder actions require an existing path before execution.
 - Website actions and browser searches are disabled by default; URLs accept only HTTP or HTTPS.
+- The native app communicates with Nova through a local process pipe and does not add a network server.
 
 Sensitive-term filtering is a safeguard, not a guarantee. Do not give Nova
 passwords, private keys, payment-card details, or other secrets.
@@ -327,5 +349,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.5 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 7.0 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.
