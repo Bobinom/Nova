@@ -27,6 +27,7 @@ class NovaGUIBridge:
         self._wake_gate: threading.Event | None = None
         self._wake_armed = False
         self._wake_awaiting_confirmation = False
+        self._wake_follow_up_active = False
 
     def start(self) -> None:
         if not self._running:
@@ -88,11 +89,15 @@ class NovaGUIBridge:
             self._wake_awaiting_confirmation = (
                 result.get("action_status") == "pending_confirmation"
             )
+            self._wake_follow_up_active = bool(
+                self.app.voice.status().get("follow_up_enabled", True)
+            )
             spoken = str(result.get("spoken_response", result["response"]))
             response["result"] = {
                 **result,
                 "should_speak": True,
                 "speech_text": spoken,
+                "follow_up_active": self._wake_follow_up_active,
             }
         elif command == "configure_elevenlabs":
             voice_id = str(request.get("voice_id", "")).strip()
@@ -114,6 +119,9 @@ class NovaGUIBridge:
                 "voice.enabled": self.app.voice.set_enabled,
                 "voice.auto_speak": self.app.voice.set_auto_speak,
                 "voice.wake_enabled": self.app.voice.set_wake_enabled,
+                "voice.follow_up_enabled": (
+                    self.app.voice.set_follow_up_enabled
+                ),
                 "actions.enabled": self.app.actions.set_enabled,
                 "live.enabled": self.app.live.set_enabled,
                 "memory.episode_auto_save": (
@@ -197,11 +205,18 @@ class NovaGUIBridge:
             self._wake_generation += 1
         self._wake_armed = False
         self._wake_awaiting_confirmation = False
+        self._wake_follow_up_active = False
 
     def _listen_for_wake(self, generation: int) -> None:
         try:
             transcript = self.app.voice.listen()
         except (OSError, RuntimeError, ValueError) as exc:
+            if self._wake_follow_up_active and WakePhraseSession.is_silence_error(
+                str(exc)
+            ):
+                self._wake_follow_up_active = False
+                self._emit_wake(generation, "conversation_end", reason="silence")
+                return
             if not WakePhraseSession.is_silence_error(str(exc)):
                 self._emit_wake(generation, "error", error=str(exc))
             else:
@@ -213,11 +228,32 @@ class NovaGUIBridge:
             self.app.conversation.handle,
             phrase,
         )
-        if session.is_sleep_phrase(transcript):
+        if session.is_sleep_phrase(transcript) or (
+            self._wake_follow_up_active
+            and self._is_plain_sleep_phrase(transcript)
+        ):
             self.app.voice.set_wake_enabled(False)
+            self._wake_follow_up_active = False
             self._emit_wake(generation, "sleep", transcript=transcript)
             return
-        if self._wake_armed or self._wake_awaiting_confirmation:
+        if (
+            self._wake_follow_up_active
+            and not self._wake_awaiting_confirmation
+            and self._is_conversation_stop_phrase(transcript)
+        ):
+            self._wake_follow_up_active = False
+            self._emit_wake(
+                generation,
+                "conversation_end",
+                transcript=transcript,
+                reason="spoken_stop",
+            )
+            return
+        if (
+            self._wake_armed
+            or self._wake_awaiting_confirmation
+            or self._wake_follow_up_active
+        ):
             request = transcript.strip()
             self._wake_armed = False
             self._wake_awaiting_confirmation = False
@@ -240,7 +276,32 @@ class NovaGUIBridge:
             "request",
             transcript=transcript,
             request=request,
+            follow_up=self._wake_follow_up_active,
         )
+
+    @staticmethod
+    def _normalized_voice_command(text: str) -> str:
+        return WakePhraseSession.normalize(text)
+
+    @classmethod
+    def _is_plain_sleep_phrase(cls, text: str) -> bool:
+        return cls._normalized_voice_command(text) in {
+            "go to sleep",
+            "sleep",
+        }
+
+    @classmethod
+    def _is_conversation_stop_phrase(cls, text: str) -> bool:
+        return cls._normalized_voice_command(text) in {
+            "stop",
+            "stop listening",
+            "cancel",
+            "never mind",
+            "end conversation",
+            "that is all",
+            "that s all",
+            "thats all",
+        }
 
     def _emit_wake(
         self,

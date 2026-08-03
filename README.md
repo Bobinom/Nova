@@ -189,6 +189,14 @@ microphone while it thinks and speaks, so it cannot activate itself from its own
 ElevenLabs or macOS voice. Raw microphone audio is not saved; recognition uses
 the configured on-device or automatic Apple Speech mode.
 
+Enable **Natural follow-up conversation** to keep talking after Nova answers
+without repeating "Hey Nova." Nova opens one short follow-up window after each
+answer, preserves the current conversation context, and returns to wake-phrase
+standby after silence. Say **"stop," "cancel," "never mind,"** or **"that's
+all"** to close the conversation while keeping wake mode ready. Say **"go to
+sleep"** during a follow-up to turn wake listening off completely. Confirmed
+computer actions still accept the next spoken `yes` or `no` safely.
+
 The navigation rail opens Voice, Chat with persisted conversation history, and
 Settings. Settings provides native switches for voice mode, automatic spoken
 responses, episode saving, memory confirmation, live information, and computer

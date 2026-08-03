@@ -66,6 +66,7 @@ class FakeVoice(FakeStatus):
             "input_available": True,
             "wake_enabled": False,
             "wake_phrase": "Hey Nova",
+            "follow_up_enabled": True,
         })
         self.spoken = []
         self.transcript = "Hello Nova"
@@ -82,6 +83,9 @@ class FakeVoice(FakeStatus):
 
     def set_wake_enabled(self, enabled):
         self.value["wake_enabled"] = enabled
+
+    def set_follow_up_enabled(self, enabled):
+        self.value["follow_up_enabled"] = enabled
 
     def setup_input(self):
         return {
@@ -311,7 +315,90 @@ class GUIBridgeTests(unittest.TestCase):
         self.assertEqual(result["response"], "Hello")
         self.assertTrue(result["should_speak"])
         self.assertEqual(result["speech_text"], "Hello")
+        self.assertTrue(result["follow_up_active"])
         self.assertEqual(app.voice.spoken, [])
+
+    def test_natural_follow_up_does_not_require_wake_phrase(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        events = []
+        received = threading.Event()
+        bridge = NovaGUIBridge(
+            app,
+            event_sink=lambda event: (events.append(event), received.set()),
+        )
+        bridge.process({"command": "wake_message", "text": "First question"})
+        app.voice.transcript = "And what about tomorrow?"
+
+        bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "request")
+        self.assertEqual(events[0]["request"], "And what about tomorrow?")
+        self.assertTrue(events[0]["follow_up"])
+
+    def test_spoken_stop_ends_follow_up_but_keeps_wake_mode_enabled(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        events = []
+        received = threading.Event()
+        bridge = NovaGUIBridge(
+            app,
+            event_sink=lambda event: (events.append(event), received.set()),
+        )
+        bridge.process({"command": "wake_message", "text": "First question"})
+        app.voice.transcript = "that's all"
+
+        bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "conversation_end")
+        self.assertEqual(events[0]["reason"], "spoken_stop")
+        self.assertTrue(app.voice.value["wake_enabled"])
+
+    def test_plain_sleep_command_turns_off_wake_during_follow_up(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        events = []
+        received = threading.Event()
+        bridge = NovaGUIBridge(
+            app,
+            event_sink=lambda event: (events.append(event), received.set()),
+        )
+        bridge.process({"command": "wake_message", "text": "First question"})
+        app.voice.transcript = "go to sleep"
+
+        bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "sleep")
+        self.assertFalse(app.voice.value["wake_enabled"])
+
+    def test_follow_up_silence_returns_to_wake_standby(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        events = []
+        received = threading.Event()
+        bridge = NovaGUIBridge(
+            app,
+            event_sink=lambda event: (events.append(event), received.set()),
+        )
+        bridge.process({"command": "wake_message", "text": "First question"})
+
+        def silence():
+            raise RuntimeError("No speech was recognized.")
+
+        app.voice.listen = silence
+        bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "conversation_end")
+        self.assertEqual(events[0]["reason"], "silence")
+        self.assertTrue(app.voice.value["wake_enabled"])
 
     def test_wake_sleep_phrase_disables_persistent_listener(self):
         app = FakeApp()
