@@ -3,11 +3,18 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Protocol
 
+import requests
+
 from nova.core.settings import SettingsManager
 from nova.voice.native import MacOSSpeechInput
+
+
+ELEVENLABS_DEFAULT_VOICE_ID = "GmM3ucvssIf0NWKHkiyc"
+ELEVENLABS_DEFAULT_MODEL = "eleven_flash_v2_5"
 
 
 class SpeechOutput(Protocol):
@@ -40,6 +47,148 @@ class MacOSSpeechOutput:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError(f"Speech output failed: {exc}") from exc
+
+
+class MacOSKeychain:
+    """Store the ElevenLabs credential outside Nova's settings and database."""
+
+    service = "com.bobinom.nova.elevenlabs"
+    account = "api-key"
+
+    def get(self) -> str | None:
+        security = shutil.which("security")
+        if security is None:
+            return None
+        try:
+            completed = subprocess.run(
+                [
+                    security,
+                    "find-generic-password",
+                    "-s",
+                    self.service,
+                    "-a",
+                    self.account,
+                    "-w",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        value = completed.stdout.strip()
+        return value if completed.returncode == 0 and value else None
+
+    def set(self, value: str) -> None:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("An ElevenLabs API key is required.")
+        security = shutil.which("security")
+        if security is None:
+            raise RuntimeError("macOS Keychain is unavailable.")
+        try:
+            subprocess.run(
+                [
+                    security,
+                    "add-generic-password",
+                    "-U",
+                    "-s",
+                    self.service,
+                    "-a",
+                    self.account,
+                    "-w",
+                    cleaned,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError("Could not save the ElevenLabs key in Keychain.") from exc
+
+
+class ElevenLabsSpeechOutput:
+    def __init__(
+        self,
+        settings: SettingsManager,
+        keychain: MacOSKeychain,
+    ) -> None:
+        self.settings = settings
+        self.keychain = keychain
+
+    def available(self) -> bool:
+        return bool(
+            shutil.which("afplay")
+            and self.keychain.get()
+            and self._voice_id()
+        )
+
+    def speak(self, text: str, *, voice: str | None, rate: int) -> None:
+        del voice, rate
+        api_key = self.keychain.get()
+        if not api_key:
+            raise RuntimeError("Add your ElevenLabs API key in Nova Settings.")
+        player = shutil.which("afplay")
+        if player is None:
+            raise RuntimeError("macOS audio playback is unavailable.")
+        voice_id = self._voice_id()
+        try:
+            response = requests.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                params={"output_format": "mp3_44100_128"},
+                headers={
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": api_key,
+                },
+                json={
+                    "text": text,
+                    "model_id": str(
+                        self.settings.get(
+                            "voice.elevenlabs.model_id",
+                            ELEVENLABS_DEFAULT_MODEL,
+                        )
+                    ),
+                },
+                timeout=45,
+            )
+            response.raise_for_status()
+        except requests.Timeout as exc:
+            raise RuntimeError("ElevenLabs took too long to respond.") from exc
+        except requests.RequestException as exc:
+            raise RuntimeError("ElevenLabs speech generation failed.") from exc
+
+        if not response.content:
+            raise RuntimeError("ElevenLabs returned empty audio.")
+        audio_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                prefix="nova-elevenlabs-",
+                suffix=".mp3",
+                delete=False,
+            ) as handle:
+                handle.write(response.content)
+                audio_path = Path(handle.name)
+            subprocess.run(
+                [player, str(audio_path)],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError("ElevenLabs audio playback failed.") from exc
+        finally:
+            if audio_path is not None:
+                audio_path.unlink(missing_ok=True)
+
+    def _voice_id(self) -> str:
+        configured = self.settings.get(
+            "voice.elevenlabs.voice_id",
+            ELEVENLABS_DEFAULT_VOICE_ID,
+        )
+        return str(configured or ELEVENLABS_DEFAULT_VOICE_ID)
 
 
 class CommandSpeechInput:
@@ -79,9 +228,16 @@ class VoiceService:
         output: SpeechOutput | None = None,
         speech_input: SpeechInput | None = None,
         data_dir: Path | None = None,
+        keychain: MacOSKeychain | None = None,
     ) -> None:
         self.settings = settings
-        self.output = output or MacOSSpeechOutput()
+        self.output = output
+        self.macos_output = MacOSSpeechOutput()
+        self.keychain = keychain or MacOSKeychain()
+        self.elevenlabs_output = ElevenLabsSpeechOutput(
+            settings,
+            self.keychain,
+        )
         command = settings.get("voice.input_command", [])
         self.input = speech_input
         self.command_input = CommandSpeechInput(
@@ -96,10 +252,14 @@ class VoiceService:
 
     def status(self) -> dict[str, Any]:
         provider = self._current_input()
+        output = self._current_output()
         return {
             "enabled": bool(self.settings.get("voice.enabled", False)),
             "auto_speak": bool(self.settings.get("voice.auto_speak", False)),
-            "output_available": self.output.available(),
+            "output_available": output.available(),
+            "output_provider": self._output_provider(),
+            "elevenlabs_configured": bool(self.keychain.get()),
+            "elevenlabs_voice_id": self._elevenlabs_voice_id(),
             "input_available": provider.available(),
             "input_provider": self._provider_name(provider),
             "input_installed": (
@@ -120,6 +280,33 @@ class VoiceService:
 
     def set_auto_speak(self, enabled: bool) -> None:
         self.settings.set("voice.auto_speak", enabled)
+
+    def set_output_provider(self, provider: str) -> None:
+        cleaned = provider.strip().lower()
+        if cleaned not in {"macos", "elevenlabs"}:
+            raise ValueError("Voice provider must be macos or elevenlabs.")
+        self.settings.set("voice.output_provider", cleaned)
+
+    def configure_elevenlabs(self, voice_id: str, api_key: str = "") -> None:
+        cleaned = voice_id.strip()
+        if not re.fullmatch(r"[A-Za-z0-9]{10,64}", cleaned):
+            raise ValueError("ElevenLabs Voice ID is invalid.")
+        if api_key.strip():
+            self.keychain.set(api_key)
+        if not self.keychain.get():
+            raise ValueError("An ElevenLabs API key is required.")
+        self.settings.set("voice.elevenlabs.voice_id", cleaned)
+        self.settings.set("voice.elevenlabs.model_id", ELEVENLABS_DEFAULT_MODEL)
+        self.set_output_provider("elevenlabs")
+
+    def test_output(self) -> dict[str, Any]:
+        output = self._current_output()
+        output.speak(
+            "Hello, I'm Nova. Your custom voice is ready.",
+            voice=self.settings.get("voice.name", None),
+            rate=self._rate(),
+        )
+        return {"spoken": True, "provider": self._output_provider()}
 
     def set_input_command(self, command: list[str]) -> None:
         cleaned = [part for part in command if part]
@@ -160,11 +347,22 @@ class VoiceService:
     def speak(self, text: str, *, force: bool = False) -> bool:
         if not force and not self.settings.get("voice.enabled", False):
             return False
-        self.output.speak(
-            text,
-            voice=self.settings.get("voice.name", None),
-            rate=self._rate(),
-        )
+        output = self._current_output()
+        try:
+            output.speak(
+                text,
+                voice=self.settings.get("voice.name", None),
+                rate=self._rate(),
+            )
+        except RuntimeError:
+            if output is self.elevenlabs_output and self.macos_output.available():
+                self.macos_output.speak(
+                    text,
+                    voice=self.settings.get("voice.name", None),
+                    rate=self._rate(),
+                )
+            else:
+                raise
         return True
 
     def speak_response(self, response: str) -> bool:
@@ -196,6 +394,28 @@ class VoiceService:
         if self.command_input.command:
             return self.command_input
         return self.native_input
+
+    def _current_output(self) -> SpeechOutput:
+        if self.output is not None:
+            return self.output
+        if self._output_provider() == "elevenlabs":
+            return self.elevenlabs_output
+        return self.macos_output
+
+    def _output_provider(self) -> str:
+        if self.output is not None:
+            return "injected"
+        configured = str(
+            self.settings.get("voice.output_provider", "macos")
+        ).lower()
+        return configured if configured in {"macos", "elevenlabs"} else "macos"
+
+    def _elevenlabs_voice_id(self) -> str:
+        configured = self.settings.get(
+            "voice.elevenlabs.voice_id",
+            ELEVENLABS_DEFAULT_VOICE_ID,
+        )
+        return str(configured or ELEVENLABS_DEFAULT_VOICE_ID)
 
     def _locale(self) -> str:
         configured = self.settings.get("voice.locale", "en-US")

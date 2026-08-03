@@ -5,7 +5,23 @@ from unittest.mock import patch
 
 from nova.app import NovaApplication
 from nova.core.settings import SettingsManager
-from nova.voice.service import MacOSSpeechOutput, VoiceService
+from nova.voice.service import (
+    ElevenLabsSpeechOutput,
+    MacOSKeychain,
+    MacOSSpeechOutput,
+    VoiceService,
+)
+
+
+class FakeKeychain:
+    def __init__(self, value: str | None = None) -> None:
+        self.value = value
+
+    def get(self) -> str | None:
+        return self.value
+
+    def set(self, value: str) -> None:
+        self.value = value
 
 
 class RecordingOutput:
@@ -36,7 +52,12 @@ class VoiceServiceTests(unittest.TestCase):
         settings = SettingsManager(root / "settings.json")
         settings.load()
         output = RecordingOutput()
-        return VoiceService(settings, output, RecordingInput()), output
+        return VoiceService(
+            settings,
+            output,
+            RecordingInput(),
+            keychain=FakeKeychain(),
+        ), output
 
     def test_voice_is_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -148,6 +169,92 @@ class VoiceServiceTests(unittest.TestCase):
             self.assertIn("your name is Eric", result["response"])
             self.assertEqual(output.calls[0][0], result["response"])
             app.stop()
+
+    def test_elevenlabs_configuration_keeps_api_key_out_of_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings = SettingsManager(root / "settings.json")
+            settings.load()
+            keychain = FakeKeychain()
+            service = VoiceService(settings, keychain=keychain)
+
+            service.configure_elevenlabs(
+                "GmM3ucvssIf0NWKHkiyc",
+                "secret-api-key",
+            )
+
+            self.assertEqual(keychain.get(), "secret-api-key")
+            self.assertEqual(service.status()["output_provider"], "elevenlabs")
+            self.assertNotIn(
+                "secret-api-key",
+                settings.path.read_text(encoding="utf-8"),
+            )
+
+    @patch("nova.voice.service.subprocess.run")
+    @patch("nova.voice.service.shutil.which", return_value="/usr/bin/afplay")
+    @patch("nova.voice.service.requests.post")
+    def test_elevenlabs_generates_and_plays_temporary_audio(
+        self,
+        post,
+        _,
+        run,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SettingsManager(Path(directory) / "settings.json")
+            settings.load()
+            output = ElevenLabsSpeechOutput(
+                settings,
+                FakeKeychain("secret-api-key"),
+            )
+            response = post.return_value
+            response.content = b"mp3-data"
+
+            output.speak("Hello", voice=None, rate=190)
+
+            request = post.call_args
+            self.assertIn("GmM3ucvssIf0NWKHkiyc", request.args[0])
+            self.assertEqual(
+                request.kwargs["headers"]["xi-api-key"],
+                "secret-api-key",
+            )
+            response.raise_for_status.assert_called_once()
+            played_path = Path(run.call_args.args[0][1])
+            self.assertFalse(played_path.exists())
+
+    def test_elevenlabs_failure_falls_back_to_macos_voice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SettingsManager(Path(directory) / "settings.json")
+            settings.load()
+            service = VoiceService(
+                settings,
+                keychain=FakeKeychain("secret-api-key"),
+            )
+            service.set_enabled(True)
+            service.set_output_provider("elevenlabs")
+
+            def fail(*args, **kwargs):
+                raise RuntimeError("offline")
+
+            service.elevenlabs_output.speak = fail
+            fallback = RecordingOutput()
+            service.macos_output = fallback
+
+            self.assertTrue(service.speak("Fallback please"))
+            self.assertEqual(fallback.calls[0][0], "Fallback please")
+
+    def test_elevenlabs_voice_id_is_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SettingsManager(Path(directory) / "settings.json")
+            settings.load()
+            service = VoiceService(settings, keychain=FakeKeychain("key"))
+
+            with self.assertRaisesRegex(ValueError, "Voice ID"):
+                service.configure_elevenlabs("not valid!")
+
+    @patch("nova.voice.service.subprocess.run", side_effect=OSError("unavailable"))
+    @patch("nova.voice.service.shutil.which", return_value="/usr/bin/security")
+    def test_keychain_lookup_failure_is_safe(self, _, __):
+        self.assertIsNone(MacOSKeychain().get())
 
     @patch("nova.voice.service.subprocess.run")
     @patch("nova.voice.service.shutil.which", return_value="/usr/bin/say")

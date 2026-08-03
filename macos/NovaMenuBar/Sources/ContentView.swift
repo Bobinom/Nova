@@ -16,6 +16,8 @@ struct ContentView: View {
     @StateObject private var loginItem = LoginItemManager()
     @AppStorage("nova.onboarding.completed.v1") private var onboardingCompleted = false
     @State private var showingOnboarding = false
+    @State private var elevenLabsAPIKey = ""
+    @State private var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
     @State private var mode: InterfaceMode = .voice
     @State private var input = ""
     @State private var showingSettings = false
@@ -312,6 +314,65 @@ struct ContentView: View {
                         detail: "Read Nova's answers aloud automatically.",
                         isOn: preferenceBinding("voice.auto_speak", value: engine.dashboard.autoSpeak)
                     )
+                    Picker(
+                        "Voice output",
+                        selection: Binding(
+                            get: { engine.dashboard.outputProvider },
+                            set: { engine.setVoiceProvider($0) }
+                        )
+                    ) {
+                        Text("Built-in macOS").tag("macos")
+                        Text("ElevenLabs custom voice").tag("elevenlabs")
+                    }
+                    .pickerStyle(.segmented)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("ElevenLabs custom voice")
+                                Text(
+                                    engine.dashboard.elevenLabsConfigured
+                                        ? "API key stored securely in macOS Keychain."
+                                        : "Connect your account without storing the key in Nova."
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Circle()
+                                .fill(engine.dashboard.elevenLabsConfigured ? .green : .orange)
+                                .frame(width: 8, height: 8)
+                        }
+                        TextField("Voice ID", text: $elevenLabsVoiceID)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField(
+                            engine.dashboard.elevenLabsConfigured
+                                ? "New API key (leave blank to keep current key)"
+                                : "ElevenLabs API key",
+                            text: $elevenLabsAPIKey
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("Save custom voice") {
+                                engine.configureElevenLabs(
+                                    apiKey: elevenLabsAPIKey,
+                                    voiceID: elevenLabsVoiceID
+                                )
+                                elevenLabsAPIKey = ""
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(novaPurple)
+                            Button("Test voice") { engine.testVoice() }
+                                .buttonStyle(.bordered)
+                                .disabled(!engine.dashboard.elevenLabsConfigured)
+                        }
+                        if !engine.voiceOutputMessage.isEmpty {
+                            Text(engine.voiceOutputMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.top, 4)
                 }
 
                 SettingsGroup(title: "Privacy & memory", icon: "lock.shield") {

@@ -2,6 +2,40 @@
 
 All notable Nova releases are documented here.
 
+## 7.6.0 - 2026-08-03
+
+### Added
+
+- Optional ElevenLabs text-to-speech output using the configured custom Voice ID
+  and the low-latency multilingual model.
+- Secure API-key storage in macOS Keychain with no credential values returned by
+  the GUI bridge or written to Nova settings and SQLite.
+- Native Settings controls for provider selection, Voice ID configuration,
+  secure account connection, connection status, and voice preview playback.
+- Automatic built-in macOS speech fallback for normal responses when ElevenLabs
+  is offline, times out, reaches a quota limit, or returns invalid audio.
+- Tests for credential isolation, request construction, temporary-file cleanup,
+  validation, fallback, and GUI bridge behavior.
+
+### Changed
+
+- Voice status now reports its output provider and whether ElevenLabs has been
+  configured without exposing the API key.
+- The DMG builder derives its filename and volume name from the app version.
+
+### Privacy
+
+- ElevenLabs output is opt-in. When selected, response text is sent to the
+  ElevenLabs API for speech synthesis and may consume account credits.
+- Generated MP3 data is played from a temporary file that is deleted immediately
+  after playback.
+
+### Preserved
+
+- Built-in macOS speech remains the default and works without ElevenLabs.
+- Standalone packaging, Ollama, SQLite memory, CLI voice input, calendar access,
+  onboarding, and confirmed actions remain compatible.
+
 ## 7.5.0 - 2026-08-03
 
 ### Added
