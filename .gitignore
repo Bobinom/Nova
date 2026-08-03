@@ -16,3 +16,6 @@ venv/
 
 # Logs
 *.log
+
+# Native app builds
+dist/
