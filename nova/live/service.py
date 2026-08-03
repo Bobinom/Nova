@@ -217,7 +217,7 @@ class LiveInformationService:
         response = self.http_get(
             url,
             params=params,
-            headers={"User-Agent": "Nova/6.4 (+https://github.com/Bobinom/Nova)"},
+            headers={"User-Agent": "Nova/6.5 (+https://github.com/Bobinom/Nova)"},
             timeout=12,
         )
         response.raise_for_status()
