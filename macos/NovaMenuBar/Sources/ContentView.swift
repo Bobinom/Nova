@@ -12,137 +12,344 @@ struct ContentView: View {
     }
 
     @EnvironmentObject private var engine: NovaEngine
-    @StateObject private var systemMonitor = SystemMonitor()
     @StateObject private var calendarModel = CalendarModel()
     @State private var mode: InterfaceMode = .voice
     @State private var input = ""
+    @State private var showingSettings = false
 
     var body: some View {
         ZStack {
+            atmosphericBackground
+
+            HStack(spacing: 0) {
+                glassNavigation
+
+                VStack(spacing: 16) {
+                    glassHeader
+
+                    if showingSettings {
+                        settingsView
+                            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    } else {
+                        HStack(spacing: 18) {
+                            Group {
+                                if mode == .voice {
+                                    voiceCenter
+                                } else {
+                                    chatCenter
+                                }
+                            }
+                            .id(mode)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+
+                            glassCards
+                                .frame(width: 270)
+                        }
+                    }
+
+                    if !showingSettings, let action = engine.pendingAction {
+                        ActionConfirmationCard(action: action)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    if !showingSettings, mode == .voice {
+                        floatingComposer
+                    }
+                }
+                .padding(.leading, 22)
+                .padding(.trailing, 24)
+                .padding(.top, 34)
+                .padding(.bottom, 22)
+            }
+        }
+        .frame(minWidth: 840, idealWidth: 960, minHeight: 580, idealHeight: 660)
+        .background(WindowCapture())
+        .preferredColorScheme(.dark)
+        .animation(.easeInOut(duration: 0.24), value: mode)
+        .animation(.easeInOut(duration: 0.22), value: engine.pendingAction != nil)
+    }
+
+    private var atmosphericBackground: some View {
+        ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.018, green: 0.025, blue: 0.055),
-                    Color(red: 0.025, green: 0.035, blue: 0.075),
-                    Color.black,
+                    Color(red: 0.035, green: 0.05, blue: 0.16),
+                    Color(red: 0.07, green: 0.055, blue: 0.20),
+                    Color(red: 0.012, green: 0.018, blue: 0.055),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            .ignoresSafeArea()
-
-            VStack(spacing: 10) {
-                topBar
-                HStack(alignment: .top, spacing: 12) {
-                    leftColumn
-                    centerColumn
-                    rightColumn
-                }
-                bottomStatus
-            }
-            .padding(12)
+            Circle()
+                .fill(novaPurple.opacity(0.16))
+                .frame(width: 520, height: 520)
+                .blur(radius: 115)
+                .offset(x: 300, y: -260)
+            Circle()
+                .fill(novaCyan.opacity(0.08))
+                .frame(width: 420, height: 420)
+                .blur(radius: 130)
+                .offset(x: -360, y: 290)
         }
-        .frame(minWidth: 860, idealWidth: 940, minHeight: 580, idealHeight: 640)
-        .background(WindowCapture())
-        .preferredColorScheme(.dark)
+        .ignoresSafeArea()
     }
 
-    private var topBar: some View {
-        HStack {
-            HStack(spacing: 12) {
-                MiniOrb()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("NOVA")
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
-                        .tracking(5)
-                    Text("PERSONAL ASSISTANT")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .tracking(1.5)
+    private var glassNavigation: some View {
+        VStack(spacing: 18) {
+            MiniOrb()
+                .scaleEffect(0.55)
+                .frame(width: 32, height: 32)
+                .padding(.top, 42)
+
+            Spacer().frame(height: 20)
+
+            glassNavButton(icon: "sparkles", selected: mode == .voice) {
+                withAnimation {
+                    showingSettings = false
+                    mode = .voice
                 }
             }
+            glassNavButton(icon: "message", selected: mode == .chat) {
+                withAnimation {
+                    showingSettings = false
+                    mode = .chat
+                }
+            }
+
+            Divider()
+                .overlay(Color.white.opacity(0.10))
+                .padding(.horizontal, 17)
+
+            glassNavButton(
+                icon: "clock.arrow.circlepath",
+                selected: !showingSettings && mode == .chat
+            ) {
+                withAnimation {
+                    showingSettings = false
+                    mode = .chat
+                }
+            }
+
             Spacer()
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(context.date.formatted(date: .complete, time: .omitted).uppercased())
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(context.date.formatted(date: .omitted, time: .standard))
-                        .font(.system(size: 19, weight: .light, design: .monospaced))
-                        .foregroundStyle(novaCyan)
-                }
+
+            glassNavButton(icon: "gearshape", selected: showingSettings) {
+                withAnimation { showingSettings = true }
             }
+                .padding(.bottom, 24)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 8)
-        .background(panelBackground)
-        .overlay(alignment: .bottom) {
-            LinearGradient(colors: [.clear, novaPurple, novaCyan, .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 1)
+        .frame(width: 68)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
         }
-        .clipShape(CutCornerShape(cut: 16))
     }
 
-    private var leftColumn: some View {
-        VStack(spacing: 10) {
-            DashboardPanel(title: "GOOGLE CALENDAR", icon: "calendar") {
-                MonthGrid()
-                Divider().overlay(panelBorder)
-                Button(action: calendarModel.requestOrConnect) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "calendar.badge.clock")
-                            .foregroundStyle(novaPurple)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(calendarModel.nextEventTitle).lineLimit(1)
-                            if !calendarModel.nextEventTime.isEmpty {
-                                Text(calendarModel.nextEventTime)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
+    private func glassNavButton(
+        icon: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(selected ? Color.white : Color.secondary)
+                .frame(width: 40, height: 40)
+                .background(selected ? novaPurple.opacity(0.24) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(novaPurple.opacity(0.35), lineWidth: 1)
                     }
                 }
-                .buttonStyle(.plain)
-            }
-            .layoutPriority(1.15)
-
-            DashboardPanel(title: "SYSTEM", icon: "desktopcomputer") {
-                StatusRow(label: "Nova Core", value: engine.state.isAvailable ? "Connected" : "Offline", good: engine.state.isAvailable)
-                StatusRow(label: "Voice Input", value: engine.dashboard.voiceReady ? "Ready" : "Unavailable", good: engine.dashboard.voiceReady)
-                StatusRow(label: "Actions", value: engine.dashboard.actionsEnabled ? "Enabled" : "Off", good: engine.dashboard.actionsEnabled)
-                StatusRow(label: "Database", value: engine.dashboard.databaseHealthy ? "Healthy" : "Check", good: engine.dashboard.databaseHealthy)
-            }
-            .layoutPriority(0.85)
         }
-        .frame(width: 235)
+        .buttonStyle(.plain)
+        .accessibilityLabel(navigationLabel(for: icon))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var centerColumn: some View {
-        VStack(spacing: 12) {
-            Group {
-                if mode == .voice {
-                    voiceCenter
-                } else {
-                    chatCenter
+    private func navigationLabel(for icon: String) -> String {
+        switch icon {
+        case "sparkles": return "Voice"
+        case "message": return "Chat"
+        case "clock.arrow.circlepath": return "Conversation history"
+        case "gearshape": return "Settings"
+        default: return "Navigation"
+        }
+    }
+
+    private var glassHeader: some View {
+        HStack {
+            Text("Nova")
+                .font(.system(size: 18, weight: .medium, design: .rounded))
+            Spacer()
+            Circle().fill(statusColor).frame(width: 7, height: 7)
+            Text(engine.state.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var glassCards: some View {
+        VStack(spacing: 14) {
+            GlassCard(icon: "calendar", title: "Today") {
+                Text(calendarModel.nextEventTitle)
+                    .font(.title3.weight(.medium))
+                    .lineLimit(2)
+                Text(
+                    calendarModel.nextEventTime.isEmpty
+                        ? "Connect Google Calendar"
+                        : calendarModel.nextEventTime
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Button("Open calendar access", action: calendarModel.requestOrConnect)
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(novaCyan)
+            }
+
+            GlassCard(icon: "sparkles", title: "Suggested") {
+                Text("Check your local weather")
+                    .font(.title3.weight(.medium))
+                Text(
+                    engine.weather.summary.isEmpty
+                        ? "Use your saved location for a live update."
+                        : engine.weather.summary
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+                Spacer(minLength: 4)
+                Button(action: engine.refreshWeather) {
+                    Label(
+                        engine.weather.isLoading ? "Loading…" : "Refresh weather",
+                        systemImage: "arrow.right"
+                    )
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(novaCyan)
+                .disabled(!engine.dashboard.liveInformationEnabled || engine.weather.isLoading)
+            }
+        }
+    }
+
+    private var floatingComposer: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(novaPurple)
+            TextField("Message Nova…", text: $input)
+                .textFieldStyle(.plain)
+                .onSubmit(send)
+            Button(action: send) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(
+                        LinearGradient(
+                            colors: [novaPurple, novaCyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send message")
+            .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !engine.state.isReady)
+        }
+        .padding(.horizontal, 17)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.16), lineWidth: 1))
+        .frame(maxWidth: 600)
+    }
+
+    private var settingsView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Settings")
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    Text("Your preferences stay on this Mac.")
+                        .foregroundStyle(.secondary)
+                }
+
+                SettingsGroup(title: "Voice", icon: "waveform") {
+                    SettingsToggle(
+                        title: "Voice mode",
+                        detail: "Allow microphone input and speech output.",
+                        isOn: preferenceBinding("voice.enabled", value: engine.dashboard.voiceEnabled)
+                    )
+                    SettingsToggle(
+                        title: "Speak responses",
+                        detail: "Read Nova's answers aloud automatically.",
+                        isOn: preferenceBinding("voice.auto_speak", value: engine.dashboard.autoSpeak)
+                    )
+                }
+
+                SettingsGroup(title: "Privacy & memory", icon: "lock.shield") {
+                    SettingsToggle(
+                        title: "Save conversation episodes",
+                        detail: "Keep useful past discussions for later recall.",
+                        isOn: preferenceBinding("memory.episode_auto_save", value: engine.dashboard.episodeAutoSave)
+                    )
+                    SettingsToggle(
+                        title: "Confirm new memories",
+                        detail: "Ask before Nova stores a new personal fact.",
+                        isOn: preferenceBinding("memory.confirm_semantic", value: engine.dashboard.confirmSemanticMemory)
+                    )
+                    SettingsToggle(
+                        title: "Live information",
+                        detail: "Allow Open-Meteo and approved factual sources.",
+                        isOn: preferenceBinding("live.enabled", value: engine.dashboard.liveInformationEnabled)
+                    )
+                }
+
+                SettingsGroup(title: "Actions", icon: "cursorarrow.click") {
+                    SettingsToggle(
+                        title: "Computer actions",
+                        detail: "Actions still require confirmation before execution.",
+                        isOn: preferenceBinding("actions.enabled", value: engine.dashboard.actionsEnabled)
+                    )
+                }
+
+                SettingsGroup(title: "Local engine", icon: "cpu") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Ollama model")
+                            Text("Model switching remains managed by Nova Core.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(engine.dashboard.ollamaModel)
+                            .font(.callout.monospaced())
+                            .foregroundStyle(novaCyan)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if let action = engine.pendingAction {
-                ActionConfirmationCard(action: action)
-            }
-
-            ModeToggle(mode: $mode)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 650, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func preferenceBinding(_ key: String, value: Bool) -> Binding<Bool> {
+        Binding(
+            get: { value },
+            set: { engine.setPreference(key, enabled: $0) }
+        )
     }
 
     private var voiceCenter: some View {
         VStack(spacing: 10) {
             Spacer(minLength: 0)
             NovaOrb(state: engine.state)
-            Text("Nova")
-                .font(.system(size: 38, weight: .light, design: .rounded))
             HStack(spacing: 7) {
                 Circle().fill(statusColor).frame(width: 9, height: 9)
                 Text(engine.state.label).foregroundStyle(.secondary)
@@ -157,8 +364,15 @@ struct ContentView: View {
                     .shadow(color: novaPurple.opacity(0.35), radius: 15)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+                engine.state == .listening ? "Listening" : "Start listening"
+            )
             .disabled(!engine.state.isReady)
-            Text(engine.state == .listening ? "Listening…" : "Click to speak")
+            Text(
+                engine.state == .listening
+                    ? "Listening…"
+                    : engine.state == .speaking ? "Speaking…" : "Click to speak"
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -224,81 +438,14 @@ struct ContentView: View {
         .padding(13)
     }
 
-    private var rightColumn: some View {
-        VStack(spacing: 10) {
-            DashboardPanel(title: "TODAY", icon: "sun.max") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                        .font(.title3.weight(.medium))
-                    Text(calendarModel.nextEventTitle)
-                        .lineLimit(1)
-                    Text(calendarModel.nextEventTime.isEmpty ? "Google Calendar not connected" : calendarModel.nextEventTime)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Divider().overlay(panelBorder)
-                    StatusRow(
-                        label: "Live information",
-                        value: engine.dashboard.liveInformationEnabled ? "On" : "Off",
-                        good: engine.dashboard.liveInformationEnabled
-                    )
-                }
-            }
-            .layoutPriority(0.85)
-
-            DashboardPanel(title: "SYSTEM HEALTH", icon: "heart.text.square") {
-                MetricRow(label: "CPU", value: systemMonitor.cpuUsage, suffix: "%")
-                MetricRow(label: "MEMORY", value: systemMonitor.memoryUsage, suffix: "%")
-                ThermalRow(state: systemMonitor.thermalState)
-                Divider().overlay(panelBorder)
-                HStack(spacing: 7) {
-                    Circle().fill(thermalColor).frame(width: 8, height: 8)
-                    Text(systemMonitor.thermalState == "Nominal" ? "Mac operating normally" : "Thermal state: \(systemMonitor.thermalState)")
-                        .font(.caption)
-                        .foregroundStyle(thermalColor)
-                }
-            }
-            .layoutPriority(1.15)
-        }
-        .frame(width: 235)
-    }
-
-    private var bottomStatus: some View {
-        HStack(spacing: 16) {
-            Label("NOVA STATUS", systemImage: "waveform.path.ecg")
-                .foregroundStyle(novaPurple)
-            Text(engine.state.isAvailable ? "OPERATIONAL" : "OFFLINE")
-                .font(.caption.weight(.semibold))
-            Spacer()
-            WaveformStrip(active: engine.state == .listening || engine.state == .thinking)
-            Text(engine.state == .listening ? "NOVA IS LISTENING" : "NOVA IS READY")
-                .font(.caption2)
-                .tracking(3)
-                .foregroundStyle(novaCyan)
-            Spacer()
-            Label("Local engine", systemImage: "cpu")
-            Circle().fill(.green).frame(width: 7, height: 7)
-            Label("\(engine.dashboard.memories) memories", systemImage: "bookmark")
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .background(panelBackground)
-        .overlay(CutCornerShape(cut: 13).stroke(panelBorder, lineWidth: 1))
-        .clipShape(CutCornerShape(cut: 13))
-    }
-
     private var statusColor: Color {
         switch engine.state {
         case .ready: return .green
-        case .thinking, .listening, .starting: return novaCyan
+        case .thinking, .listening, .speaking, .starting: return novaCyan
         case .unavailable: return .red
         }
     }
 
-    private var thermalColor: Color {
-        systemMonitor.thermalState == "Nominal" ? .green : .orange
-    }
 
     private func send() {
         let message = input
@@ -307,7 +454,45 @@ struct ContentView: View {
     }
 }
 
-private struct DashboardPanel<Content: View>: View {
+private struct GlassCard<Content: View>: View {
+    let icon: String
+    let title: String
+    @ViewBuilder let content: Content
+
+    init(icon: String, title: String, @ViewBuilder content: () -> Content) {
+        self.icon = icon
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.72))
+            Divider().overlay(Color.white.opacity(0.10))
+            content
+        }
+        .padding(17)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(.ultraThinMaterial)
+        .background(
+            LinearGradient(
+                colors: [Color.white.opacity(0.055), novaPurple.opacity(0.035)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.22), radius: 22, y: 12)
+    }
+}
+
+private struct SettingsGroup<Content: View>: View {
     let title: String
     let icon: String
     @ViewBuilder let content: Content
@@ -319,161 +504,40 @@ private struct DashboardPanel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Label(title, systemImage: icon)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .tracking(1.4)
+                .font(.headline)
                 .foregroundStyle(novaPurple)
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(10)
-            Divider().overlay(panelBorder)
             content
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            LinearGradient(
-                colors: [Color.white.opacity(0.055), Color.white.opacity(0.018)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.13), lineWidth: 1)
         )
-        .overlay(CutCornerShape(cut: 12).stroke(panelBorder, lineWidth: 1))
-        .shadow(color: novaPurple.opacity(0.08), radius: 14, y: 6)
-        .clipShape(CutCornerShape(cut: 12))
     }
 }
 
-private struct StatusRow: View {
-    let label: String
-    let value: String
-    let good: Bool
+private struct SettingsToggle: View {
+    let title: String
+    let detail: String
+    @Binding var isOn: Bool
 
     var body: some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.caption)
-            Circle().fill(good ? .green : .gray).frame(width: 7, height: 7)
-        }
-        .font(.caption)
-        .padding(.vertical, 3)
-    }
-}
-
-private struct MetricRow: View {
-    let label: String
-    let value: Int
-    let suffix: String
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack {
-                Text(label).font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(value)\(suffix)").font(.caption.monospacedDigit())
-            }
-            ProgressView(value: Double(value), total: 100)
-                .tint(LinearGradient(colors: [novaPurple, novaCyan], startPoint: .leading, endPoint: .trailing))
-        }
-    }
-}
-
-private struct ThermalRow: View {
-    let state: String
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack {
-                Text("THERMAL").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Text(state).font(.caption)
-            }
-            ProgressView(value: state == "Nominal" ? 0.2 : state == "Warm" ? 0.5 : 0.85)
-                .tint(state == "Nominal" ? .green : .orange)
-        }
-    }
-}
-
-private struct MonthGrid: View {
-    private let calendar = Calendar.current
-    private let now = Date()
-
-    var body: some View {
-        let cells = monthCells()
-        VStack(spacing: 4) {
-            Text(now.formatted(.dateTime.month(.wide).year()).uppercased())
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 3) {
-                ForEach(calendar.shortWeekdaySymbols, id: \.self) { symbol in
-                    Text(symbol.prefix(1)).font(.caption2).foregroundStyle(.secondary)
-                }
-                ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
-                    if let day {
-                        Text("\(day)")
-                            .font(.caption2.monospacedDigit())
-                            .frame(width: 19, height: 19)
-                            .background(day == calendar.component(.day, from: now) ? novaPurple.opacity(0.45) : .clear)
-                            .clipShape(Circle())
-                    } else {
-                        Color.clear.frame(width: 19, height: 19)
-                    }
-                }
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-    }
-
-    private func monthCells() -> [Int?] {
-        guard let interval = calendar.dateInterval(of: .month, for: now),
-              let range = calendar.range(of: .day, in: .month, for: now) else {
-            return []
-        }
-        let weekday = calendar.component(.weekday, from: interval.start)
-        let leading = (weekday - calendar.firstWeekday + 7) % 7
-        return Array(repeating: nil, count: leading) + range.map(Optional.some)
-    }
-}
-
-private struct ModeToggle: View {
-    @Binding var mode: ContentView.InterfaceMode
-
-    var body: some View {
-        HStack(spacing: 4) {
-            modeButton(.voice, icon: "waveform")
-            modeButton(.chat, icon: "message")
-        }
-        .padding(4)
-        .frame(width: 260)
-        .background(Color.white.opacity(0.045))
-        .overlay(Capsule().stroke(panelBorder, lineWidth: 1))
-        .clipShape(Capsule())
-    }
-
-    private func modeButton(
-        _ candidate: ContentView.InterfaceMode,
-        icon: String
-    ) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { mode = candidate }
-        } label: {
-            Label(candidate.rawValue, systemImage: icon)
-                .font(.callout.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(
-                    mode == candidate
-                        ? LinearGradient(
-                            colors: [novaPurple.opacity(0.85), novaCyan.opacity(0.55)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        : LinearGradient(colors: [.clear], startPoint: .leading, endPoint: .trailing)
-                )
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        .toggleStyle(.switch)
+        .tint(novaPurple)
+        .accessibilityHint(detail)
     }
 }
 
@@ -484,106 +548,300 @@ private struct NovaOrb: View {
         TimelineView(
             .periodic(
                 from: .now,
-                by: state == .listening || state == .thinking ? 1.0 / 20.0 : 1.0 / 8.0
+                by: state == .listening || state == .thinking || state == .speaking
+                    ? 1.0 / 20.0
+                    : 1.0 / 10.0
             )
         ) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                Circle()
-                    .fill(novaPurple.opacity(0.12))
-                    .blur(radius: 34)
-                    .padding(30)
+            ReferenceOrbArtwork(
+                phase: context.date.timeIntervalSinceReferenceDate,
+                state: state
+            )
+        }
+        .frame(width: 390, height: 224)
+    }
+}
 
-                ForEach(0..<6, id: \.self) { index in
-                    Circle()
-                        .trim(
-                            from: 0.03 + Double(index) * 0.045,
-                            to: 0.40 + Double(index) * 0.075
-                        )
-                        .stroke(
-                            index.isMultiple(of: 2)
-                                ? novaPurple.opacity(0.42)
-                                : novaCyan.opacity(0.35),
-                            style: StrokeStyle(
-                                lineWidth: index < 2 ? 1.5 : 0.8,
-                                lineCap: .round,
-                                dash: index < 3 ? [2, 5] : [1, 8]
-                            )
-                        )
-                        .rotationEffect(
-                            .degrees(
-                                phase * (index.isMultiple(of: 2) ? 8 : -6)
-                                    + Double(index * 41)
-                            )
-                        )
-                        .padding(CGFloat(index * 8))
-                }
+private struct ReferenceOrbArtwork: View {
+    let phase: TimeInterval
+    let state: NovaEngine.State
 
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(red: 0.02, green: 0.01, blue: 0.07),
-                                Color(red: 0.10, green: 0.035, blue: 0.24),
-                                Color(red: 0.025, green: 0.02, blue: 0.09),
-                            ],
-                            center: UnitPoint(x: 0.43, y: 0.38),
-                            startRadius: 0,
-                            endRadius: 105
-                        )
+    var body: some View {
+        let listening = state == .listening
+        let speaking = state == .speaking
+        let active = listening || speaking || state == .thinking
+        let breathWave = sin(phase * (active ? 3.6 : 1.55))
+        let breathing = active
+            ? 1 + 0.036 * breathWave
+            : 1 + 0.022 * breathWave
+        let breathGlow = 0.5 + 0.5 * breathWave
+        let breathLift = CGFloat(-2.5 * breathGlow)
+        let driftX = sin(phase * 0.45) * (active ? 2.6 : 1.2)
+        let driftY = cos(phase * 0.38) * (active ? 2.0 : 0.8)
+        let sweep = 0.5 + 0.5 * sin(phase * 0.7)
+
+        ZStack {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [novaPurple.opacity(active ? 0.20 : 0.11), novaCyan.opacity(0.035), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 175
                     )
-                    .padding(38)
-                    .overlay {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.18), .clear, novaCyan.opacity(0.09)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .blur(radius: 12)
-                            .padding(51)
-                    }
+                )
+                .frame(
+                    width: 360 + CGFloat(breathGlow * 14),
+                    height: 218 + CGFloat(breathGlow * 9)
+                )
+                .blur(radius: 12 + breathGlow * 5)
+                .opacity(0.72 + breathGlow * 0.28)
 
+            orbImage
+                .scaleEffect(breathing)
+                .rotation3DEffect(
+                    .degrees(driftY),
+                    axis: (x: 1, y: 0, z: 0),
+                    perspective: 0.38
+                )
+                .offset(y: breathLift)
+                .brightness(breathGlow * 0.035)
+
+            CoreEnergyAnimation(
+                phase: phase,
+                active: active,
+                speaking: speaking
+            )
+                .rotation3DEffect(
+                    .degrees(driftX),
+                    axis: (x: 0, y: 1, z: 0),
+                    perspective: 0.38
+                )
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    Color.white.opacity(active ? 0.14 : 0.07),
+                    novaCyan.opacity(active ? 0.10 : 0.045),
+                    .clear,
+                ],
+                startPoint: UnitPoint(x: sweep - 0.35, y: 0.1),
+                endPoint: UnitPoint(x: sweep + 0.35, y: 0.9)
+            )
+            .blendMode(.screen)
+            .mask(
                 Circle()
-                    .trim(from: 0.03, to: 0.97)
+                    .frame(width: 208, height: 208)
+                    .offset(x: -16)
+            )
+            .scaleEffect(breathing)
+
+            Circle()
+                .trim(from: 0.06, to: 0.28)
+                .stroke(
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(active ? 0.75 : 0.38), novaPurple, .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: active ? 2.2 : 1.2, lineCap: .round)
+                )
+                .frame(width: 191, height: 191)
+                .rotationEffect(.degrees(phase * (active ? 18 : 7)))
+                .offset(x: -16)
+                .blur(radius: active ? 1.2 : 0.5)
+                .blendMode(.screen)
+
+            Circle()
+                .stroke(novaPurple.opacity(active ? 0.22 : 0.08), lineWidth: active ? 3 : 1)
+                .frame(width: 205, height: 205)
+                .offset(x: -16)
+                .blur(radius: active ? 8 : 5)
+                .scaleEffect(breathing)
+                .opacity(0.55 + breathGlow * 0.45)
+
+            if listening {
+                ListeningOrbAnimation(phase: phase)
+                    .transition(.opacity)
+            }
+
+            if speaking {
+                SpeakingOrbAnimation(phase: phase)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .frame(width: 390, height: 224)
+        .offset(x: 13)
+        .animation(.easeInOut(duration: 0.25), value: active)
+    }
+
+    @ViewBuilder
+    private var orbImage: some View {
+        if let url = Bundle.main.url(
+            forResource: "nova-orb-transparent",
+            withExtension: "png"
+        ), let image = NSImage(contentsOf: url) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(786.0 / 452.0, contentMode: .fit)
+        } else {
+            MiniOrb()
+                .scaleEffect(3.8)
+                .frame(width: 390, height: 224)
+            }
+    }
+}
+
+private struct CoreEnergyAnimation: View {
+    let phase: TimeInterval
+    let active: Bool
+    let speaking: Bool
+
+    var body: some View {
+        let speed = speaking ? 2.2 : active ? 1.55 : 0.72
+        let pulse = 0.5 + 0.5 * sin(phase * (active ? 4.4 : 2.0))
+        let lightX = 0.42 + 0.12 * sin(phase * 0.65 * speed)
+        let lightY = 0.44 + 0.10 * cos(phase * 0.52 * speed)
+
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            novaCyan.opacity(0.10 + pulse * 0.12),
+                            novaPurple.opacity(0.10),
+                            .clear,
+                        ],
+                        center: UnitPoint(x: lightX, y: lightY),
+                        startRadius: 0,
+                        endRadius: 62
+                    )
+                )
+
+            ForEach(0..<4, id: \.self) { index in
+                Ellipse()
+                    .trim(
+                        from: 0.04 + Double(index) * 0.12,
+                        to: 0.40 + Double(index) * 0.11
+                    )
                     .stroke(
                         AngularGradient(
-                            colors: [novaPurple, .white, novaPurple, novaCyan, .white, novaPurple],
+                            colors: [
+                                .clear,
+                                index.isMultiple(of: 2)
+                                    ? novaPurple.opacity(0.34)
+                                    : novaCyan.opacity(0.30),
+                                Color.white.opacity(0.12),
+                                .clear,
+                            ],
                             center: .center
                         ),
                         style: StrokeStyle(
-                            lineWidth: state == .listening ? 13 : 9,
+                            lineWidth: CGFloat(5 + index * 2),
                             lineCap: .round
                         )
                     )
-                    .padding(35)
-                    .rotationEffect(.degrees(phase * 6))
-                    .blur(radius: 7)
-                    .opacity(0.7)
-
-                Circle()
-                    .trim(from: 0.02, to: 0.98)
-                    .stroke(
-                        AngularGradient(
-                            colors: [novaPurple, .white, novaPurple, novaCyan, .white, novaPurple],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: state == .listening ? 12 : 8, lineCap: .round)
+                    .frame(
+                        width: CGFloat(96 + index * 7),
+                        height: CGFloat(68 + index * 9)
                     )
-                    .padding(35)
-                    .rotationEffect(.degrees(phase * 6))
-                    .shadow(color: novaPurple.opacity(0.95), radius: state == .listening ? 24 : 14)
-                    .animation(.easeInOut(duration: 0.25), value: state)
-
-                Circle()
-                    .stroke(Color.white.opacity(0.22), lineWidth: 0.7)
-                    .padding(50)
+                    .rotationEffect(
+                        .degrees(
+                            phase * speed * (index.isMultiple(of: 2) ? 18 : -14)
+                                + Double(index * 31)
+                        )
+                    )
+                    .blur(radius: CGFloat(1.5 + Double(index) * 0.55))
+                    .blendMode(.screen)
             }
-            .drawingGroup(opaque: false, colorMode: .extendedLinear)
+
+            Circle()
+                .fill(Color.white.opacity(0.06 + pulse * 0.08))
+                .frame(width: 28 + pulse * 10, height: 28 + pulse * 10)
+                .blur(radius: 12)
+                .offset(
+                    x: CGFloat(sin(phase * speed) * 13),
+                    y: CGFloat(cos(phase * speed * 0.8) * 9)
+                )
         }
-        .frame(width: 255, height: 255)
+        .frame(width: 126, height: 126)
+        .clipShape(Circle())
+        .offset(x: -16, y: 3)
+        .opacity(active ? 0.88 : 0.62)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct ListeningOrbAnimation: View {
+    let phase: TimeInterval
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { index in
+                let progress = (phase * 0.72 + Double(index) / 3.0)
+                    .truncatingRemainder(dividingBy: 1)
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [novaCyan, novaPurple.opacity(0.45), .clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2.2 - progress
+                    )
+                    .frame(width: 202, height: 202)
+                    .scaleEffect(1 + progress * 0.34)
+                    .opacity(0.72 * (1 - progress))
+            }
+
+            Circle()
+                .trim(from: 0.08, to: 0.32)
+                .stroke(novaCyan, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: 211, height: 211)
+                .rotationEffect(.degrees(phase * 48))
+                .shadow(color: novaCyan, radius: 8)
+        }
+        .offset(x: -16)
+    }
+}
+
+private struct SpeakingOrbAnimation: View {
+    let phase: TimeInterval
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .trim(from: 0.03, to: 0.46)
+                .stroke(
+                    AngularGradient(colors: [novaPurple, .white, novaCyan, .clear], center: .center),
+                    style: StrokeStyle(lineWidth: 3.2, lineCap: .round)
+                )
+                .frame(width: 211, height: 211)
+                .rotationEffect(.degrees(phase * 65))
+                .shadow(color: novaPurple, radius: 9)
+
+            HStack(spacing: 3) {
+                ForEach(0..<17, id: \.self) { index in
+                    let wave = abs(sin(phase * 7.5 + Double(index) * 0.72))
+                    Capsule()
+                        .fill(index.isMultiple(of: 2) ? novaPurple : novaCyan)
+                        .frame(width: 3, height: 5 + wave * 25)
+                        .shadow(
+                            color: index.isMultiple(of: 2) ? novaPurple : novaCyan,
+                            radius: 4
+                        )
+                }
+            }
+            .frame(width: 122, height: 34)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(Color.black.opacity(0.16))
+            .clipShape(Capsule())
+            .offset(y: 54)
+        }
+        .offset(x: -16)
     }
 }
 
@@ -621,32 +879,6 @@ private struct ActionConfirmationCard: View {
     }
 }
 
-private struct WaveformStrip: View {
-    let active: Bool
-
-    var body: some View {
-        if active {
-            TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { context in
-                bars(phase: context.date.timeIntervalSinceReferenceDate)
-            }
-        } else {
-            bars(phase: 0)
-        }
-    }
-
-    private func bars(phase: TimeInterval) -> some View {
-            HStack(spacing: 3) {
-                ForEach(0..<18, id: \.self) { index in
-                    let wave = sin(phase * 5 + Double(index) * 0.65)
-                    Capsule()
-                        .fill(index.isMultiple(of: 2) ? novaPurple : novaCyan)
-                        .frame(width: 2, height: active ? 5 + abs(wave) * 14 : 4)
-                }
-            }
-            .frame(width: 90, height: 22)
-    }
-}
-
 private struct MessageBubble: View {
     let message: ChatMessage
 
@@ -677,23 +909,6 @@ private struct WindowCapture: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             if let window = nsView.window { WindowCoordinator.shared.attach(window) }
-        }
-    }
-}
-
-private struct CutCornerShape: Shape {
-    let cut: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.minX + cut, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
-            path.closeSubpath()
         }
     }
 }

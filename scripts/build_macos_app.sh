@@ -16,6 +16,10 @@ fi
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$REPO_DIR/macos/NovaMenuBar/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$REPO_DIR/macos/NovaMenuBar/Resources/nova-orb-reference.png" \
+    "$RESOURCES_DIR/nova-orb-reference.png"
+cp "$REPO_DIR/macos/NovaMenuBar/Resources/nova-orb-transparent.png" \
+    "$RESOURCES_DIR/nova-orb-transparent.png"
 printf '%s\n' "$REPO_DIR" > "$RESOURCES_DIR/repo-path.txt"
 
 xcrun swiftc \
