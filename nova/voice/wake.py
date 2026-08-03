@@ -85,6 +85,7 @@ class WakePhraseSession:
             try:
                 result = self.handle_message(request)
                 response = str(result["response"])
+                spoken_response = str(result.get("spoken_response", response))
             except (OSError, RuntimeError, ValueError, KeyError) as exc:
                 on_error(str(exc))
                 awaiting_confirmation = False
@@ -95,7 +96,7 @@ class WakePhraseSession:
                 result.get("action_status") == "pending_confirmation"
             )
             if not bool(self.voice.status()["auto_speak"]):
-                self._speak(response, on_error)
+                self._speak(spoken_response, on_error)
 
     def _speak(self, text: str, on_error: Callable[[str], None]) -> None:
         try:

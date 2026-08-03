@@ -65,6 +65,7 @@ class HandsFreeConversation:
             try:
                 result = self.handle_message(transcript)
                 response = str(result["response"])
+                spoken_response = str(result.get("spoken_response", response))
             except (OSError, RuntimeError, ValueError, KeyError) as exc:
                 on_error(str(exc))
                 continue
@@ -72,6 +73,6 @@ class HandsFreeConversation:
             on_response(response)
             if not bool(self.voice.status()["auto_speak"]):
                 try:
-                    self.voice.speak(response, force=True)
+                    self.voice.speak(spoken_response, force=True)
                 except (OSError, RuntimeError, ValueError) as exc:
                     on_error(f"Speech output failed: {exc}")

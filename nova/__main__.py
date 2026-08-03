@@ -142,6 +142,9 @@ def main() -> None:
     print("  dont-save-conversation")
     print("  forget-last-conversation")
     print("  privacy-audit")
+    print("  live-status")
+    print("  live-on | live-off")
+    print("  web-search <query>")
     print("  export-memory [path]")
     print("  backup [path]")
     print("  restore <backup-path>")
@@ -459,6 +462,28 @@ def main() -> None:
 
             if raw == "privacy-audit":
                 print(app.privacy_audit())
+                continue
+
+            if raw == "live-status":
+                print(app.live.status())
+                continue
+
+            if raw in {"live-on", "live-off"}:
+                enabled = raw == "live-on"
+                app.live.set_enabled(enabled)
+                if enabled:
+                    print(
+                        "Live information enabled. Weather and search queries "
+                        "may be sent to Open-Meteo, DuckDuckGo, or Wikipedia."
+                    )
+                else:
+                    print("Live information disabled.")
+                continue
+
+            if raw.startswith("web-search "):
+                query = raw[len("web-search "):].strip()
+                result = app.handle_message(f"Search the web for {query}")
+                print(f"Nova: {result['response']}")
                 continue
 
             if raw == "export-memory" or raw.startswith("export-memory "):
