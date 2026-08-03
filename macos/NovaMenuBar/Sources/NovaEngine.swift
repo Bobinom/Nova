@@ -24,6 +24,17 @@ struct DashboardStatus {
     var actionsEnabled = false
     var liveInformationEnabled = false
     var databaseHealthy = false
+    var voiceEnabled = false
+    var autoSpeak = false
+    var episodeAutoSave = true
+    var confirmSemanticMemory = false
+    var ollamaModel = "llama3.2"
+}
+
+struct WeatherStatus {
+    var summary = ""
+    var location = ""
+    var isLoading = false
 }
 
 @MainActor
@@ -33,6 +44,7 @@ final class NovaEngine: ObservableObject {
         case ready
         case thinking
         case listening
+        case speaking
         case unavailable(String)
 
         var label: String {
@@ -41,6 +53,7 @@ final class NovaEngine: ObservableObject {
             case .ready: return "Ready"
             case .thinking: return "Thinking"
             case .listening: return "Listening"
+            case .speaking: return "Speaking"
             case .unavailable: return "Unavailable"
             }
         }
@@ -57,6 +70,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var pendingAction: PendingAction?
     @Published private(set) var dashboard = DashboardStatus()
+    @Published private(set) var weather = WeatherStatus()
 
     private var process: Process?
     private var input: FileHandle?
@@ -144,7 +158,29 @@ final class NovaEngine: ObservableObject {
     func listen() {
         guard state.isReady else { return }
         state = .listening
-        send(command: "listen")
+        send(command: "listen_gui")
+    }
+
+    func refreshWeather() {
+        guard state.isAvailable, !weather.isLoading else { return }
+        weather.isLoading = true
+        send(command: "weather")
+    }
+
+    func setPreference(_ key: String, enabled: Bool) {
+        switch key {
+        case "voice.enabled": dashboard.voiceEnabled = enabled
+        case "voice.auto_speak": dashboard.autoSpeak = enabled
+        case "actions.enabled": dashboard.actionsEnabled = enabled
+        case "live.enabled": dashboard.liveInformationEnabled = enabled
+        case "memory.episode_auto_save": dashboard.episodeAutoSave = enabled
+        case "memory.confirm_semantic": dashboard.confirmSemanticMemory = enabled
+        default: return
+        }
+        send(
+            command: "set_preference",
+            values: ["key": key, "value": enabled]
+        )
     }
 
     func confirmAction() {
@@ -208,6 +244,9 @@ final class NovaEngine: ObservableObject {
             let error = response["error"] as? String ?? "Unknown bridge error"
             if command == "dashboard" {
                 state = .unavailable(error)
+            } else if command == "weather" {
+                weather.isLoading = false
+                weather.summary = error
             } else {
                 messages.append(ChatMessage(role: .system, text: error))
                 state = .ready
@@ -217,11 +256,13 @@ final class NovaEngine: ObservableObject {
         if response["shutdown"] as? Bool == true { return }
 
         switch command {
-        case "dashboard":
+        case "dashboard", "set_preference":
             if let result = response["result"] as? [String: Any] {
                 updateDashboard(result)
             }
-            send(command: "history", values: ["limit": 30])
+            if command == "dashboard" {
+                send(command: "history", values: ["limit": 30])
+            }
         case "history":
             if let turns = response["result"] as? [[String: Any]] {
                 messages = turns.compactMap { turn in
@@ -234,19 +275,41 @@ final class NovaEngine: ObservableObject {
                 }
             }
             state = .ready
-        case "listen":
+        case "listen", "listen_gui":
             if let result = response["result"] as? [String: Any] {
                 if let transcript = result["transcript"] as? String {
                     messages.append(ChatMessage(role: .user, text: transcript))
                 }
                 applyConversationResult(result)
+                if command == "listen_gui",
+                   result["should_speak"] as? Bool == true,
+                   let speech = result["speech_text"] as? String,
+                   !speech.isEmpty {
+                    state = .speaking
+                    send(command: "speak", values: ["text": speech])
+                    return
+                }
             }
+            state = .ready
+        case "speak":
             state = .ready
         case "message":
             if let result = response["result"] as? [String: Any] {
                 applyConversationResult(result)
             }
             state = .ready
+        case "weather":
+            if let result = response["result"] as? [String: Any] {
+                weather = WeatherStatus(
+                    summary: result["spoken_response"] as? String
+                        ?? result["response"] as? String
+                        ?? "Weather is unavailable.",
+                    location: result["location"] as? String ?? "",
+                    isLoading: false
+                )
+            } else {
+                weather.isLoading = false
+            }
         default:
             state = .ready
         }
@@ -272,6 +335,7 @@ final class NovaEngine: ObservableObject {
         let voice = result["voice"] as? [String: Any] ?? [:]
         let actions = result["actions"] as? [String: Any] ?? [:]
         let live = result["live_information"] as? [String: Any] ?? [:]
+        let privacy = result["privacy"] as? [String: Any] ?? [:]
         dashboard = DashboardStatus(
             version: status["version"] as? String ?? "",
             memories: status["memories"] as? Int ?? 0,
@@ -282,7 +346,14 @@ final class NovaEngine: ObservableObject {
                 ?? live["allow_web_access"] as? Bool
                 ?? false
             ),
-            databaseHealthy: status["database_status"] as? String == "healthy"
+            databaseHealthy: status["database_status"] as? String == "healthy",
+            voiceEnabled: voice["enabled"] as? Bool ?? false,
+            autoSpeak: voice["auto_speak"] as? Bool ?? false,
+            episodeAutoSave: privacy["episode_auto_save"] as? Bool ?? true,
+            confirmSemanticMemory: (
+                privacy["confirm_semantic_memory"] as? Bool ?? false
+            ),
+            ollamaModel: result["ollama_model"] as? String ?? "llama3.2"
         )
     }
 }

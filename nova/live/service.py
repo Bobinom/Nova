@@ -38,9 +38,26 @@ class LiveInformationService:
     def set_enabled(self, enabled: bool) -> None:
         self.settings.set("privacy.allow_web_access", enabled)
 
-    def process(self, text: str) -> dict[str, Any]:
+    def process(
+        self,
+        text: str,
+        *,
+        default_location: str | None = None,
+    ) -> dict[str, Any]:
+        local_weather = self._uses_local_weather_reference(text)
         weather_location = self._weather_location(text)
+        if weather_location is None and local_weather:
+            weather_location = default_location
         search_query = self._search_query(text)
+        if local_weather and weather_location is None:
+            return {
+                "handled": True,
+                "intent": "live_weather_location_missing",
+                "response": (
+                    "Tell me where you live first, then I can check your "
+                    "local weather."
+                ),
+            }
         if weather_location is None and search_query is None:
             return {"handled": False}
         if not self.status()["enabled"]:
@@ -217,7 +234,7 @@ class LiveInformationService:
         response = self.http_get(
             url,
             params=params,
-            headers={"User-Agent": "Nova/7.2 (+https://github.com/Bobinom/Nova)"},
+            headers={"User-Agent": "Nova/7.3 (+https://github.com/Bobinom/Nova)"},
             timeout=12,
         )
         response.raise_for_status()
@@ -236,6 +253,18 @@ class LiveInformationService:
             re.I,
         )
         return match.group(1).strip() if match else None
+
+    @staticmethod
+    def _uses_local_weather_reference(text: str) -> bool:
+        normalized = text.strip().rstrip("?.!")
+        return bool(
+            re.search(
+                r"\b(?:weather|temperature|forecast)\b.*"
+                r"\b(?:here|where i live|my location|locally)\b",
+                normalized,
+                re.I,
+            )
+        )
 
     @staticmethod
     def _search_query(text: str) -> str | None:

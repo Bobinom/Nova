@@ -11,6 +11,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         self.window = window
         window.isReleasedWhenClosed = false
         window.delegate = self
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .black
     }
 
     func show() {

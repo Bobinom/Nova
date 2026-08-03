@@ -114,8 +114,14 @@ class ConversationManager:
             if action_result.get("handled"):
                 result = action_result
             else:
+                location = self.memory.recall("user.location")
                 live_result = (
-                    self.live.process(text)
+                    self.live.process(
+                        text,
+                        default_location=(
+                            str(location.value) if location is not None else None
+                        ),
+                    )
                     if self.live is not None
                     else {"handled": False}
                 )

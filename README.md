@@ -1,4 +1,4 @@
-# Nova 7.2
+# Nova 7.3
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -31,7 +31,12 @@ episodic memory.
 - Confirm-before-execution apps, files, notes, reminders, calendar events, and web actions
 - Native SwiftUI chat window and macOS menu-bar app connected to the same Nova core
 - Global Option-Space quick access and optional launch at login
-- Voice-first command center with animated Nova orb and optional restored chat
+- Floating Glass native interface with an animated, transparent Nova orb
+- Functional Voice, Chat/History, and Settings navigation
+- Native controls for voice, spoken replies, memory privacy, live information,
+  and confirmed computer actions
+- Distinct real-time orb animations for listening, thinking, and speaking
+- Privacy-safe local weather refresh using a saved location and Open-Meteo
 - Google Calendar events through calendars connected to macOS Internet Accounts
 - Live local CPU, memory, database, service, and macOS thermal-state dashboard
 - Clickable Confirm and Cancel controls for pending computer actions
@@ -115,6 +120,30 @@ state (`Nominal`, `Warm`, `High`, or `Critical`) instead of inventing a temperat
 The Google Calendar card reads only Google or Google Workspace calendars already
 connected under **System Settings > Internet Accounts**. Click the card once to
 grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
+
+### Nova 7.3 interface
+
+Nova 7.3 gives the native app a Floating Glass design with an atmospheric indigo
+background, narrow navigation rail, translucent live cards, floating composer,
+and central animated orb. The orb breathes gently while ready, emits expanding
+cyan rings while listening, and displays a moving purple/cyan waveform while
+Nova is speaking.
+
+The navigation rail opens Voice, Chat with persisted conversation history, and
+Settings. Settings provides native switches for voice mode, automatic spoken
+responses, episode saving, memory confirmation, live information, and computer
+actions. Changes are persisted by Nova Core and remain available to the CLI.
+The current Ollama model is displayed honestly as read-only because Nova Core
+does not yet expose a safe runtime model-switching setting.
+
+The app separates microphone capture from speech playback so these animations
+follow Nova's actual voice state. This native bridge change does not alter the
+terminal `listen`, hands-free conversation, or wake-phrase commands.
+
+The glass **Suggested** card can request current local weather from Open-Meteo. Nova uses
+the exact `user.location` fact you previously saved, and sends it only when you
+click **Refresh local weather** or explicitly ask a weather question. Live web
+access must already be enabled with `live-on`.
 
 ## Memory examples
 

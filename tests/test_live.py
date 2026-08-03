@@ -94,6 +94,53 @@ class LiveInformationTests(unittest.TestCase):
             self.assertEqual(http.calls[0][0], service.WEATHER_GEOCODING_URL)
             self.assertEqual(http.calls[1][0], service.WEATHER_URL)
 
+    def test_weather_here_uses_saved_default_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, http = self.make_service(Path(directory), [
+                {
+                    "results": [{
+                        "name": "Malmö",
+                        "country": "Sweden",
+                        "latitude": 55.605,
+                        "longitude": 13.0038,
+                    }],
+                },
+                {
+                    "current": {
+                        "temperature_2m": 18.5,
+                        "apparent_temperature": 17.9,
+                        "weather_code": 2,
+                        "wind_speed_10m": 11.2,
+                    },
+                    "current_units": {
+                        "temperature_2m": "°C",
+                        "wind_speed_10m": "km/h",
+                    },
+                },
+            ])
+            service.set_enabled(True)
+
+            result = service.process(
+                "What's the weather like here?",
+                default_location="Malmö Sweden",
+            )
+
+            self.assertEqual(result["intent"], "live_weather")
+            self.assertEqual(
+                http.calls[0][1]["params"]["name"],
+                "Malmö Sweden",
+            )
+
+    def test_weather_here_without_saved_location_gives_clear_prompt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, http = self.make_service(Path(directory))
+            service.set_enabled(True)
+
+            result = service.process("What's the weather like here?")
+
+            self.assertEqual(result["intent"], "live_weather_location_missing")
+            self.assertEqual(http.calls, [])
+
     def test_search_uses_duckduckgo_answer_with_source(self):
         with tempfile.TemporaryDirectory() as directory:
             service, http = self.make_service(Path(directory), [{
