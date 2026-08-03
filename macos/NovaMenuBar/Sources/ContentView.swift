@@ -14,6 +14,7 @@ struct ContentView: View {
         }
         .frame(minWidth: 520, idealWidth: 620, minHeight: 480, idealHeight: 640)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background(WindowCapture())
     }
 
     private var header: some View {
@@ -99,6 +100,26 @@ struct ContentView: View {
         let message = input
         input = ""
         engine.sendMessage(message)
+    }
+}
+
+private struct WindowCapture: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                WindowCoordinator.shared.attach(window)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                WindowCoordinator.shared.attach(window)
+            }
+        }
     }
 }
 

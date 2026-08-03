@@ -22,9 +22,14 @@ xcrun swiftc \
     -swift-version 5 \
     -parse-as-library \
     -framework AppKit \
+    -framework Carbon \
+    -framework ServiceManagement \
     -framework SwiftUI \
     -o "$MACOS_DIR/Nova" \
     "$SOURCE_DIR/NovaEngine.swift" \
+    "$SOURCE_DIR/WindowCoordinator.swift" \
+    "$SOURCE_DIR/GlobalHotKey.swift" \
+    "$SOURCE_DIR/LoginItemManager.swift" \
     "$SOURCE_DIR/ContentView.swift" \
     "$SOURCE_DIR/NovaMenuBarApp.swift"
 
