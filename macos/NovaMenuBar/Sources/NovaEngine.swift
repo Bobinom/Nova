@@ -29,6 +29,9 @@ struct DashboardStatus {
     var episodeAutoSave = true
     var confirmSemanticMemory = false
     var ollamaModel = "llama3.2"
+    var voiceLocale = "en-US"
+    var listenSeconds = 7
+    var recognitionMode = "on-device"
 }
 
 struct WeatherStatus {
@@ -71,6 +74,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var pendingAction: PendingAction?
     @Published private(set) var dashboard = DashboardStatus()
     @Published private(set) var weather = WeatherStatus()
+    @Published private(set) var voiceSetupMessage = ""
 
     private var process: Process?
     private var input: FileHandle?
@@ -183,6 +187,15 @@ final class NovaEngine: ObservableObject {
         )
     }
 
+    func setupVoice() {
+        guard state.isReady else {
+            voiceSetupMessage = "Wait for Nova Core to finish starting, then try again."
+            return
+        }
+        voiceSetupMessage = "Checking microphone access…"
+        send(command: "voice_setup")
+    }
+
     func confirmAction() {
         respondToAction("yes")
     }
@@ -247,6 +260,9 @@ final class NovaEngine: ObservableObject {
             } else if command == "weather" {
                 weather.isLoading = false
                 weather.summary = error
+            } else if command == "voice_setup" {
+                voiceSetupMessage = error
+                state = .ready
             } else {
                 messages.append(ChatMessage(role: .system, text: error))
                 state = .ready
@@ -263,6 +279,14 @@ final class NovaEngine: ObservableObject {
             if command == "dashboard" {
                 send(command: "history", values: ["limit": 30])
             }
+        case "voice_setup":
+            if let result = response["result"] as? [String: Any] {
+                voiceSetupMessage = result["message"] as? String
+                    ?? (result["available"] as? Bool == true
+                        ? "Microphone and speech recognition are ready."
+                        : "Microphone access still needs attention.")
+            }
+            send(command: "dashboard")
         case "history":
             if let turns = response["result"] as? [[String: Any]] {
                 messages = turns.compactMap { turn in
@@ -353,7 +377,10 @@ final class NovaEngine: ObservableObject {
             confirmSemanticMemory: (
                 privacy["confirm_semantic_memory"] as? Bool ?? false
             ),
-            ollamaModel: result["ollama_model"] as? String ?? "llama3.2"
+            ollamaModel: result["ollama_model"] as? String ?? "llama3.2",
+            voiceLocale: voice["locale"] as? String ?? "en-US",
+            listenSeconds: voice["listen_seconds"] as? Int ?? 7,
+            recognitionMode: voice["recognition_mode"] as? String ?? "on-device"
         )
     }
 }

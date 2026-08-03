@@ -2,6 +2,30 @@
 
 All notable Nova releases are documented here.
 
+## 7.4.0 - 2026-08-03
+
+### Added
+
+- Five-step first-launch guide for Nova Core, microphone and speech recognition,
+  Google Calendar, privacy and memory, confirmed actions, and launch at login.
+- Real native microphone diagnostics from the setup guide, including macOS
+  permission prompts and clear success or failure feedback.
+- A Settings shortcut for reopening setup whenever preferences or permissions
+  need to be reviewed.
+- Native microphone and speech-recognition permission descriptions in the app
+  bundle.
+
+### Changed
+
+- Voice status now exposes the configured recognition language, listening
+  duration, and recognition mode to the native interface.
+- Setup choices immediately update Nova's existing persisted local settings.
+
+### Preserved
+
+- Floating Glass interface, SQLite memory, Ollama chat, CLI behavior, Google
+  Calendar integration, voice modes, and action confirmation remain compatible.
+
 ## 7.3.0 - 2026-08-03
 
 ### Added

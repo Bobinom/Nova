@@ -15,15 +15,19 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>7.3.0</string>
+    <string>7.4.0</string>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>5</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Nova uses the microphone only when you ask it to listen.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Nova converts your speech into text so it can answer you.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Nova shows upcoming events from Google calendars connected to this Mac.</string>
     <key>NSCalendarsUsageDescription</key>

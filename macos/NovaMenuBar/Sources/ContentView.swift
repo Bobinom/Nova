@@ -13,6 +13,9 @@ struct ContentView: View {
 
     @EnvironmentObject private var engine: NovaEngine
     @StateObject private var calendarModel = CalendarModel()
+    @StateObject private var loginItem = LoginItemManager()
+    @AppStorage("nova.onboarding.completed.v1") private var onboardingCompleted = false
+    @State private var showingOnboarding = false
     @State private var mode: InterfaceMode = .voice
     @State private var input = ""
     @State private var showingSettings = false
@@ -68,6 +71,25 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.24), value: mode)
         .animation(.easeInOut(duration: 0.22), value: engine.pendingAction != nil)
+        .sheet(
+            isPresented: Binding(
+                get: { !onboardingCompleted || showingOnboarding },
+                set: { presented in
+                    if !presented { showingOnboarding = false }
+                }
+            )
+        ) {
+            OnboardingView(
+                engine: engine,
+                calendarModel: calendarModel,
+                loginItem: loginItem,
+                onFinish: {
+                    onboardingCompleted = true
+                    showingOnboarding = false
+                }
+            )
+            .interactiveDismissDisabled(!onboardingCompleted)
+        }
     }
 
     private var atmosphericBackground: some View {
@@ -330,6 +352,20 @@ struct ContentView: View {
                         Text(engine.dashboard.ollamaModel)
                             .font(.callout.monospaced())
                             .foregroundStyle(novaCyan)
+                    }
+                }
+
+                SettingsGroup(title: "Setup", icon: "checklist") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("First-launch guide")
+                            Text("Review Nova Core, voice, calendar, and privacy.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Open setup") { showingOnboarding = true }
+                            .buttonStyle(.bordered)
                     }
                 }
             }
