@@ -2,6 +2,36 @@
 
 All notable Nova releases are documented here.
 
+## 7.5.0 - 2026-08-03
+
+### Added
+
+- Embedded Nova Core executable containing Python 3.12 and Nova's runtime
+  dependencies, built reproducibly with PyInstaller.
+- Orb-based native macOS application icon generated during the build.
+- Drag-to-Applications `Nova-7.5.0.dmg` build script.
+- Bundled native speech-helper source so voice setup continues to work after the
+  app is moved away from the repository.
+
+### Changed
+
+- The SwiftUI app now launches Nova Core from its own Resources directory rather
+  than using the repository's `.venv` and `repo-path.txt`.
+- The app builder creates a clean, ad-hoc-signed standalone bundle and checks for
+  the required packaging tools.
+
+### Verified
+
+- The embedded core starts from a copied app outside the repository, accesses
+  the existing `~/.nova4` data, reports healthy status, and shuts down cleanly.
+- The standalone bundle passes strict deep code-signature verification and has
+  no repository-path resource.
+
+### Preserved
+
+- Terminal development workflows, Ollama integration, SQLite memory, first-run
+  setup, voice, calendar access, and confirmed actions remain compatible.
+
 ## 7.4.0 - 2026-08-03
 
 ### Added

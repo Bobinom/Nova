@@ -89,15 +89,8 @@ final class NovaEngine: ObservableObject {
         guard process == nil else { return }
         state = .starting
 
-        guard let repositoryPath = repositoryPath() else {
-            state = .unavailable("Nova repository location is missing.")
-            return
-        }
-
-        let python = URL(fileURLWithPath: repositoryPath)
-            .appendingPathComponent(".venv/bin/python").path
-        guard FileManager.default.isExecutableFile(atPath: python) else {
-            state = .unavailable("Nova's Python environment was not found.")
+        guard let coreURL = bundledCoreURL() else {
+            state = .unavailable("Nova Core is missing from this app.")
             return
         }
 
@@ -105,9 +98,8 @@ final class NovaEngine: ObservableObject {
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: python)
-        task.arguments = ["-m", "nova.gui_bridge"]
-        task.currentDirectoryURL = URL(fileURLWithPath: repositoryPath)
+        task.executableURL = coreURL
+        task.currentDirectoryURL = coreURL.deletingLastPathComponent()
         task.standardInput = inputPipe
         task.standardOutput = outputPipe
         task.standardError = errorPipe
@@ -216,12 +208,12 @@ final class NovaEngine: ObservableObject {
         send(command: "message", values: ["text": response])
     }
 
-    private func repositoryPath() -> String? {
-        guard let url = Bundle.main.url(forResource: "repo-path", withExtension: "txt"),
-              let value = try? String(contentsOf: url, encoding: .utf8) else {
-            return nil
-        }
-        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func bundledCoreURL() -> URL? {
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let url = resources
+            .appendingPathComponent("NovaCore", isDirectory: true)
+            .appendingPathComponent("NovaCore", isDirectory: false)
+        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
     }
 
     private func send(command: String, values: [String: Any] = [:]) {
