@@ -110,6 +110,7 @@ class VoiceService:
             "locale": self._locale(),
             "listen_seconds": self._duration(),
             "recognition_mode": self._recognition_mode(),
+            "wake_phrase": self._wake_phrase(),
             "voice": self.settings.get("voice.name", None),
             "rate": self._rate(),
         }
@@ -145,6 +146,12 @@ class VoiceService:
             )
         self.settings.set("voice.recognition_mode", cleaned)
         self.native_input.recognition_mode = cleaned
+
+    def set_wake_phrase(self, phrase: str) -> None:
+        words = re.findall(r"[A-Za-z0-9]+", phrase)
+        if not 1 <= len(words) <= 3:
+            raise ValueError("Wake phrase must contain one to three words.")
+        self.settings.set("voice.wake_phrase", " ".join(words))
 
     def setup_input(self) -> dict[str, Any]:
         self._refresh_inputs()
@@ -206,6 +213,11 @@ class VoiceService:
             self.settings.get("voice.recognition_mode", "on-device")
         ).lower()
         return configured if configured in {"on-device", "automatic"} else "on-device"
+
+    def _wake_phrase(self) -> str:
+        configured = str(self.settings.get("voice.wake_phrase", "Nova"))
+        words = re.findall(r"[A-Za-z0-9]+", configured)
+        return " ".join(words[:3]) if words else "Nova"
 
     def _provider_name(self, provider: SpeechInput) -> str:
         if provider is self.native_input:

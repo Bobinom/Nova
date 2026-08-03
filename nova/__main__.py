@@ -4,6 +4,7 @@ from pathlib import Path
 from nova import __version__
 from nova.app import NovaApplication
 from nova.voice.conversation import HandsFreeConversation
+from nova.voice.wake import WakePhraseSession
 
 
 def _print_memories(app: NovaApplication, category: str | None = None) -> None:
@@ -93,6 +94,25 @@ def _run_hands_free_conversation(app: NovaApplication) -> None:
         print("Hands-free conversation stopped.")
 
 
+def _run_wake_phrase_mode(app: NovaApplication) -> None:
+    phrase = str(app.voice.status()["wake_phrase"])
+    session = WakePhraseSession(app.voice, app.handle_message, phrase)
+    print(
+        f"Wake phrase mode started. Say '{phrase}' followed by a request. "
+        f"Say '{phrase}, go to sleep' or press Ctrl+C to finish."
+    )
+    reason = session.run(
+        on_activation=lambda text: print(f"Wake phrase detected: {text}"),
+        on_transcript=lambda text: print(f"You: {text}"),
+        on_response=lambda text: print(f"Nova: {text}"),
+        on_error=lambda text: print(f"Wake phrase error: {text}"),
+    )
+    if reason == "interrupted":
+        print("Wake phrase mode interrupted.")
+    else:
+        print("Wake phrase mode stopped.")
+
+
 def main() -> None:
     app = NovaApplication()
     app.start()
@@ -137,6 +157,8 @@ def main() -> None:
     print("  say <text>")
     print("  listen")
     print("  conversation-on")
+    print("  wake-on")
+    print("  wake-phrase <phrase>")
     print("  voice-setup")
     print("  voice-locale <locale>")
     print("  voice-duration <seconds>")
@@ -218,6 +240,24 @@ def main() -> None:
                     print("Voice mode is disabled. Use voice-on first.")
                 else:
                     _run_hands_free_conversation(app)
+                continue
+
+            if raw == "wake-on":
+                if not app.voice.status()["enabled"]:
+                    print("Voice mode is disabled. Use voice-on first.")
+                else:
+                    _run_wake_phrase_mode(app)
+                continue
+
+            if raw.startswith("wake-phrase "):
+                phrase = raw[len("wake-phrase "):].strip()
+                try:
+                    app.voice.set_wake_phrase(phrase)
+                except ValueError as exc:
+                    print(f"Invalid wake phrase: {exc}")
+                else:
+                    configured = app.voice.status()["wake_phrase"]
+                    print(f"Wake phrase set to {configured}.")
                 continue
 
             if raw == "voice-setup":
