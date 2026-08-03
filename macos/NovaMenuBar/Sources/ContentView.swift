@@ -314,6 +314,26 @@ struct ContentView: View {
                         detail: "Read Nova's answers aloud automatically.",
                         isOn: preferenceBinding("voice.auto_speak", value: engine.dashboard.autoSpeak)
                     )
+                    SettingsToggle(
+                        title: "Hands-free wake phrase",
+                        detail: "Listen for \"\(engine.dashboard.wakePhrase)\" without saving audio.",
+                        isOn: Binding(
+                            get: { engine.dashboard.wakeEnabled },
+                            set: { engine.setWakeEnabled($0) }
+                        )
+                    )
+                    if !engine.wakeStatusMessage.isEmpty {
+                        Label(
+                            engine.wakeStatusMessage,
+                            systemImage: engine.dashboard.wakeEnabled
+                                ? "mic.fill"
+                                : "mic.slash"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(
+                            engine.dashboard.wakeEnabled ? novaCyan : .secondary
+                        )
+                    }
                     Picker(
                         "Voice output",
                         selection: Binding(
@@ -451,7 +471,13 @@ struct ContentView: View {
                 Circle().fill(statusColor).frame(width: 9, height: 9)
                 Text(engine.state.label).foregroundStyle(.secondary)
             }
-            Button(action: engine.listen) {
+            Button {
+                if engine.dashboard.wakeEnabled {
+                    engine.setWakeEnabled(false)
+                } else {
+                    engine.listen()
+                }
+            } label: {
                 Image(systemName: engine.state == .listening ? "waveform" : "mic.fill")
                     .font(.system(size: 25))
                     .frame(width: 64, height: 64)
@@ -462,12 +488,16 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                engine.state == .listening ? "Listening" : "Start listening"
+                engine.dashboard.wakeEnabled
+                    ? "Stop hands-free listening"
+                    : engine.state == .listening ? "Listening" : "Start listening"
             )
             .disabled(!engine.state.isReady)
             Text(
                 engine.state == .listening
-                    ? "Listening…"
+                    ? engine.dashboard.wakeEnabled
+                        ? "Say \"\(engine.dashboard.wakePhrase)\"…"
+                        : "Listening…"
                     : engine.state == .speaking ? "Speaking…" : "Click to speak"
             )
                 .font(.caption)

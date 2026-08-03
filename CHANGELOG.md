@@ -2,6 +2,37 @@
 
 All notable Nova releases are documented here.
 
+## 7.7.0 - 2026-08-03
+
+### Added
+
+- Opt-in hands-free wake-phrase mode in the standalone SwiftUI app.
+- Persistent wake control in Voice Settings and the Nova menu-bar menu.
+- Asynchronous wake-listening events that keep chat, Settings, and Nova Core
+  responsive while the microphone waits for the configured phrase.
+- Native listening, activation, thinking, speaking, error, and sleeping feedback.
+- Spoken sleep command support and wake-free follow-up action confirmation.
+- Automatic restart after silence and recoverable recognition errors.
+- Tests for opt-in persistence, non-blocking wake events, requests, spoken
+  responses, sleep commands, and bridge ordering.
+
+### Changed
+
+- Nova pauses wake listening while processing and speaking, then resumes after a
+  short delay to prevent its own ElevenLabs or macOS output from reactivating it.
+- Enabling hands-free mode also enables the required voice mode.
+
+### Privacy
+
+- Hands-free listening is always visibly indicated and disabled by default.
+- Nova stores transcripts only through the existing conversation behavior; raw
+  microphone audio is not saved.
+
+### Preserved
+
+- Manual click-to-speak, terminal wake mode, ElevenLabs, macOS fallback, Ollama,
+  SQLite memory, standalone packaging, and confirmed actions remain compatible.
+
 ## 7.6.0 - 2026-08-03
 
 ### Added

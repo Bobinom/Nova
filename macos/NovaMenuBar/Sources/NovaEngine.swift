@@ -35,6 +35,8 @@ struct DashboardStatus {
     var outputProvider = "macos"
     var elevenLabsConfigured = false
     var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
+    var wakeEnabled = false
+    var wakePhrase = "Hey Nova"
 }
 
 struct WeatherStatus {
@@ -64,7 +66,7 @@ final class NovaEngine: ObservableObject {
             }
         }
 
-        var isReady: Bool { self == .ready }
+        var isReady: Bool { self == .ready || self == .listening }
 
         var isAvailable: Bool {
             if case .unavailable = self { return false }
@@ -79,11 +81,15 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var weather = WeatherStatus()
     @Published private(set) var voiceSetupMessage = ""
     @Published private(set) var voiceOutputMessage = ""
+    @Published private(set) var wakeStatusMessage = ""
 
     private var process: Process?
     private var input: FileHandle?
     private var outputBuffer = Data()
     private var pendingCommands: [String: String] = [:]
+    private var wakeRestartTask: Task<Void, Never>?
+    private var resumeWakeAfterSpeech = false
+    private var resumeWakeAfterResponse = false
 
     init() {
         start()
@@ -150,13 +156,18 @@ final class NovaEngine: ObservableObject {
     func sendMessage(_ text: String) {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, state.isReady else { return }
+        if dashboard.wakeEnabled {
+            pauseWakeListening()
+            resumeWakeAfterResponse = true
+        }
         messages.append(ChatMessage(role: .user, text: cleaned))
         state = .thinking
         send(command: "message", values: ["text": cleaned])
     }
 
     func listen() {
-        guard state.isReady else { return }
+        guard state == .ready else { return }
+        if dashboard.wakeEnabled { pauseWakeListening() }
         state = .listening
         send(command: "listen_gui")
     }
@@ -171,6 +182,7 @@ final class NovaEngine: ObservableObject {
         switch key {
         case "voice.enabled": dashboard.voiceEnabled = enabled
         case "voice.auto_speak": dashboard.autoSpeak = enabled
+        case "voice.wake_enabled": dashboard.wakeEnabled = enabled
         case "actions.enabled": dashboard.actionsEnabled = enabled
         case "live.enabled": dashboard.liveInformationEnabled = enabled
         case "memory.episode_auto_save": dashboard.episodeAutoSave = enabled
@@ -181,6 +193,21 @@ final class NovaEngine: ObservableObject {
             command: "set_preference",
             values: ["key": key, "value": enabled]
         )
+    }
+
+    func setWakeEnabled(_ enabled: Bool) {
+        wakeStatusMessage = enabled
+            ? "Starting hands-free listening…"
+            : "Hands-free listening is off."
+        if enabled && !dashboard.voiceEnabled {
+            dashboard.voiceEnabled = true
+            send(
+                command: "set_preference",
+                values: ["key": "voice.enabled", "value": true]
+            )
+        }
+        if !enabled { pauseWakeListening() }
+        setPreference("voice.wake_enabled", enabled: enabled)
     }
 
     func setupVoice() {
@@ -225,6 +252,8 @@ final class NovaEngine: ObservableObject {
     }
 
     func stop() {
+        wakeRestartTask?.cancel()
+        pauseWakeListening()
         guard process != nil else { return }
         send(command: "shutdown")
         input?.closeFile()
@@ -271,6 +300,10 @@ final class NovaEngine: ObservableObject {
     }
 
     private func handle(_ response: [String: Any]) {
+        if response["event"] as? String == "wake" {
+            handleWakeEvent(response)
+            return
+        }
         let id = response["id"] as? String ?? ""
         let command = pendingCommands.removeValue(forKey: id) ?? ""
         guard response["ok"] as? Bool == true else {
@@ -306,6 +339,8 @@ final class NovaEngine: ObservableObject {
                 voiceOutputMessage = "ElevenLabs voice saved securely and selected."
             } else if command == "set_voice_provider" {
                 voiceOutputMessage = "Voice provider updated."
+            } else if command == "set_preference", dashboard.wakeEnabled {
+                scheduleWakeListen()
             }
         case "voice_setup":
             if let result = response["result"] as? [String: Any] {
@@ -327,6 +362,14 @@ final class NovaEngine: ObservableObject {
                 }
             }
             state = .ready
+            if dashboard.wakeEnabled { scheduleWakeListen() }
+        case "wake_listen_start":
+            if dashboard.wakeEnabled {
+                state = .listening
+                wakeStatusMessage = "Listening for \(dashboard.wakePhrase)…"
+            }
+        case "wake_listen_stop":
+            if state == .listening { state = .ready }
         case "listen", "listen_gui":
             if let result = response["result"] as? [String: Any] {
                 if let transcript = result["transcript"] as? String {
@@ -345,6 +388,10 @@ final class NovaEngine: ObservableObject {
             state = .ready
         case "speak":
             state = .ready
+            if resumeWakeAfterSpeech {
+                resumeWakeAfterSpeech = false
+                scheduleWakeListen(delayNanoseconds: 350_000_000)
+            }
         case "test_voice":
             if let result = response["result"] as? [String: Any],
                let provider = result["provider"] as? String {
@@ -358,6 +405,24 @@ final class NovaEngine: ObservableObject {
                 applyConversationResult(result)
             }
             state = .ready
+            if resumeWakeAfterResponse {
+                resumeWakeAfterResponse = false
+                scheduleWakeListen(delayNanoseconds: 350_000_000)
+            }
+        case "wake_message":
+            if let result = response["result"] as? [String: Any] {
+                applyConversationResult(result)
+                if result["should_speak"] as? Bool == true,
+                   let speech = result["speech_text"] as? String,
+                   !speech.isEmpty {
+                    resumeWakeAfterSpeech = true
+                    state = .speaking
+                    send(command: "speak", values: ["text": speech])
+                    return
+                }
+            }
+            state = .ready
+            scheduleWakeListen()
         case "weather":
             if let result = response["result"] as? [String: Any] {
                 weather = WeatherStatus(
@@ -420,7 +485,68 @@ final class NovaEngine: ObservableObject {
             outputProvider: voice["output_provider"] as? String ?? "macos",
             elevenLabsConfigured: voice["elevenlabs_configured"] as? Bool ?? false,
             elevenLabsVoiceID: voice["elevenlabs_voice_id"] as? String
-                ?? "GmM3ucvssIf0NWKHkiyc"
+                ?? "GmM3ucvssIf0NWKHkiyc",
+            wakeEnabled: voice["wake_enabled"] as? Bool ?? false,
+            wakePhrase: voice["wake_phrase"] as? String ?? "Hey Nova"
         )
+    }
+
+    private func handleWakeEvent(_ event: [String: Any]) {
+        guard dashboard.wakeEnabled else { return }
+        let kind = event["kind"] as? String ?? "error"
+        switch kind {
+        case "ignored", "silence":
+            state = .ready
+            scheduleWakeListen(delayNanoseconds: 180_000_000)
+        case "activation":
+            state = .speaking
+            wakeStatusMessage = "Wake phrase detected."
+            resumeWakeAfterSpeech = true
+            send(command: "speak", values: ["text": "Yes?"])
+        case "request":
+            guard let request = event["request"] as? String,
+                  !request.isEmpty else {
+                scheduleWakeListen()
+                return
+            }
+            messages.append(ChatMessage(role: .user, text: request))
+            wakeStatusMessage = "Heard: \(request)"
+            state = .thinking
+            send(command: "wake_message", values: ["text": request])
+        case "sleep":
+            dashboard.wakeEnabled = false
+            wakeStatusMessage = "Hands-free listening is off."
+            resumeWakeAfterSpeech = false
+            state = .speaking
+            send(command: "speak", values: ["text": "Wake phrase mode stopped."])
+        default:
+            state = .ready
+            wakeStatusMessage = event["error"] as? String
+                ?? "Wake listening will retry."
+            scheduleWakeListen(delayNanoseconds: 1_500_000_000)
+        }
+    }
+
+    private func scheduleWakeListen(
+        delayNanoseconds: UInt64 = 0
+    ) {
+        guard dashboard.wakeEnabled else { return }
+        wakeRestartTask?.cancel()
+        wakeRestartTask = Task { @MainActor [weak self] in
+            if delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
+            }
+            guard let self, !Task.isCancelled,
+                  self.dashboard.wakeEnabled,
+                  self.state == .ready else { return }
+            self.send(command: "wake_listen_start")
+        }
+    }
+
+    private func pauseWakeListening() {
+        wakeRestartTask?.cancel()
+        wakeRestartTask = nil
+        guard process != nil else { return }
+        send(command: "wake_listen_stop")
     }
 }

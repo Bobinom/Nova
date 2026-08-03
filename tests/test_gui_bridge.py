@@ -1,5 +1,6 @@
 import io
 import json
+import threading
 import unittest
 
 from nova.gui_bridge import NovaGUIBridge, run_bridge
@@ -63,11 +64,14 @@ class FakeVoice(FakeStatus):
             "enabled": True,
             "auto_speak": True,
             "input_available": True,
+            "wake_enabled": False,
+            "wake_phrase": "Hey Nova",
         })
         self.spoken = []
+        self.transcript = "Hello Nova"
 
     def listen(self):
-        return "Hello Nova"
+        return self.transcript
 
     def speak(self, text):
         self.spoken.append(text)
@@ -75,6 +79,9 @@ class FakeVoice(FakeStatus):
 
     def set_auto_speak(self, enabled):
         self.value["auto_speak"] = enabled
+
+    def set_wake_enabled(self, enabled):
+        self.value["wake_enabled"] = enabled
 
     def setup_input(self):
         return {
@@ -163,6 +170,22 @@ class GUIBridgeTests(unittest.TestCase):
         self.assertTrue(responses[1]["result"]["running"])
         self.assertTrue(responses[2]["shutdown"])
         self.assertTrue(app.stopped)
+
+    def test_line_protocol_survives_malformed_json(self):
+        app = FakeApp()
+        requests = io.StringIO(
+            'not-json\n'
+            '{"id":"status","command":"status"}\n'
+            '{"id":"done","command":"shutdown"}\n'
+        )
+        output = io.StringIO()
+
+        run_bridge(app=app, input_stream=requests, output_stream=output)
+
+        responses = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertFalse(responses[0]["ok"])
+        self.assertTrue(responses[1]["result"]["running"])
+        self.assertTrue(responses[2]["shutdown"])
 
     def test_dashboard_combines_local_service_status(self):
         result = NovaGUIBridge(FakeApp()).process({"command": "dashboard"})[
@@ -257,6 +280,56 @@ class GUIBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["spoken"])
         self.assertEqual(result["provider"], "macos")
+
+    def test_wake_listener_emits_request_without_blocking_bridge(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        app.voice.transcript = "Hey Nova, open Safari"
+        events = []
+        received = threading.Event()
+
+        def collect(event):
+            events.append(event)
+            received.set()
+
+        bridge = NovaGUIBridge(app, event_sink=collect)
+        response = bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(response["result"]["listening"])
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "request")
+        self.assertEqual(events[0]["request"], "open Safari")
+
+    def test_wake_message_returns_speech_without_speaking_in_worker(self):
+        app = FakeApp()
+        result = NovaGUIBridge(app).process({
+            "command": "wake_message",
+            "text": "What time is it?",
+        })["result"]
+
+        self.assertEqual(result["response"], "Hello")
+        self.assertTrue(result["should_speak"])
+        self.assertEqual(result["speech_text"], "Hello")
+        self.assertEqual(app.voice.spoken, [])
+
+    def test_wake_sleep_phrase_disables_persistent_listener(self):
+        app = FakeApp()
+        app.voice.value["wake_enabled"] = True
+        app.voice.transcript = "Hey Nova, go to sleep"
+        events = []
+        received = threading.Event()
+        bridge = NovaGUIBridge(
+            app,
+            event_sink=lambda event: (events.append(event), received.set()),
+        )
+
+        bridge.process({"command": "wake_listen_start"})
+        bridge.release_wake_listener()
+
+        self.assertTrue(received.wait(timeout=1))
+        self.assertEqual(events[0]["kind"], "sleep")
+        self.assertFalse(app.voice.value["wake_enabled"])
 
 
 if __name__ == "__main__":

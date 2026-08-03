@@ -31,6 +31,13 @@ private struct NovaMenu: View {
         Divider()
         Label(engine.state.label, systemImage: engine.state.isReady ? "checkmark.circle" : "circle.dotted")
         Toggle(
+            "Listen for \(engine.dashboard.wakePhrase)",
+            isOn: Binding(
+                get: { engine.dashboard.wakeEnabled },
+                set: { engine.setWakeEnabled($0) }
+            )
+        )
+        Toggle(
             "Launch at Login",
             isOn: Binding(
                 get: { loginItem.enabled },
