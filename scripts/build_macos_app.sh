@@ -9,7 +9,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SOURCE_DIR="$REPO_DIR/macos/NovaMenuBar/Sources"
 
 if ! xcodebuild -version >/dev/null 2>&1; then
-    echo "Nova 7.0 requires the full Xcode app to build the SwiftUI interface."
+    echo "The Nova macOS app requires full Xcode to build the SwiftUI interface."
     echo "Install Xcode from the App Store, open it once, then run this script again."
     exit 1
 fi
@@ -23,6 +23,7 @@ xcrun swiftc \
     -parse-as-library \
     -framework AppKit \
     -framework Carbon \
+    -framework EventKit \
     -framework ServiceManagement \
     -framework SwiftUI \
     -o "$MACOS_DIR/Nova" \
@@ -30,6 +31,8 @@ xcrun swiftc \
     "$SOURCE_DIR/WindowCoordinator.swift" \
     "$SOURCE_DIR/GlobalHotKey.swift" \
     "$SOURCE_DIR/LoginItemManager.swift" \
+    "$SOURCE_DIR/SystemMonitor.swift" \
+    "$SOURCE_DIR/CalendarModel.swift" \
     "$SOURCE_DIR/ContentView.swift" \
     "$SOURCE_DIR/NovaMenuBarApp.swift"
 

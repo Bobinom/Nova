@@ -39,6 +39,16 @@ class NovaGUIBridge:
         elif command == "history":
             limit = max(1, min(int(request.get("limit", 30)), 100))
             response["result"] = self.app.conversation.history(limit)
+        elif command == "listen":
+            response["result"] = self.app.listen_and_respond()
+        elif command == "dashboard":
+            response["result"] = {
+                "status": self.app.status(),
+                "voice": self.app.voice.status(),
+                "actions": self.app.actions.status(),
+                "privacy": self.app.conversation.privacy_status(),
+                "live_information": self.app.live.status(),
+            }
         elif command == "shutdown":
             response["shutdown"] = True
         else:
@@ -65,7 +75,13 @@ def run_bridge(
                     raise ValueError("Bridge requests must be JSON objects.")
                 request_id = request.get("id")
                 response = bridge.process(request)
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (
+                json.JSONDecodeError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
                 response = {
                     "id": request_id,
                     "ok": False,

@@ -9,12 +9,26 @@ class FakeConversation:
     def history(self, limit):
         return [{"role": "assistant", "text": "Hello", "limit": limit}]
 
+    def privacy_status(self):
+        return {"episode_auto_save": True}
+
+
+class FakeStatus:
+    def __init__(self, value):
+        self.value = value
+
+    def status(self):
+        return self.value
+
 
 class FakeApp:
     def __init__(self):
         self.conversation = FakeConversation()
         self.started = False
         self.stopped = False
+        self.voice = FakeStatus({"enabled": True})
+        self.actions = FakeStatus({"enabled": True})
+        self.live = FakeStatus({"enabled": False})
 
     def start(self):
         self.started = True
@@ -23,10 +37,13 @@ class FakeApp:
         self.stopped = True
 
     def status(self):
-        return {"version": "7.0.0", "running": self.started}
+        return {"version": "7.2.0", "running": self.started}
 
     def handle_message(self, text):
         return {"handled": True, "response": f"Reply to {text}"}
+
+    def listen_and_respond(self):
+        return {"transcript": "Hello Nova", "response": "Hello"}
 
 
 class GUIBridgeTests(unittest.TestCase):
@@ -69,6 +86,23 @@ class GUIBridgeTests(unittest.TestCase):
         self.assertTrue(responses[1]["result"]["running"])
         self.assertTrue(responses[2]["shutdown"])
         self.assertTrue(app.stopped)
+
+    def test_dashboard_combines_local_service_status(self):
+        result = NovaGUIBridge(FakeApp()).process({"command": "dashboard"})[
+            "result"
+        ]
+
+        self.assertTrue(result["voice"]["enabled"])
+        self.assertTrue(result["actions"]["enabled"])
+        self.assertFalse(result["live_information"]["enabled"])
+
+    def test_listen_returns_transcript_and_response(self):
+        result = NovaGUIBridge(FakeApp()).process({"command": "listen"})[
+            "result"
+        ]
+
+        self.assertEqual(result["transcript"], "Hello Nova")
+        self.assertEqual(result["response"], "Hello")
 
 
 if __name__ == "__main__":
