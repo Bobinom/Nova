@@ -1,4 +1,4 @@
-# Nova 6.2
+# Nova 6.3
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -25,6 +25,7 @@ episodic memory.
 - Built-in on-device macOS microphone transcription with native permissions
 - Configurable recognition language and listening duration
 - Hands-free listen, respond, and continue mode with spoken stop control
+- Configurable wake phrase that ignores background speech until activated
 - Optional pluggable local transcription command fallback
 - Confirm-before-execution app and website actions with persistent permissions
 - Persistent local SQLite storage
@@ -147,6 +148,8 @@ Continue our PC upgrade discussion.
 | `say <text>` | Speak text immediately with macOS `say` |
 | `listen` | Capture one local transcript and send it to Nova |
 | `conversation-on` | Start hands-free voice conversation until spoken stop or Ctrl+C |
+| `wake-on` | Wait for the configured wake phrase before handling speech |
+| `wake-phrase <phrase>` | Set a one-to-three-word wake phrase; default is `Nova` |
 | `voice-setup` | Build and verify Nova's signed native microphone helper |
 | `voice-locale <locale>` | Set recognition language, such as `en-US` or `sv-SE` |
 | `voice-duration <seconds>` | Set one-shot listening time from 2–20 seconds |
@@ -206,6 +209,20 @@ return to the normal prompt, or press `Ctrl+C` to interrupt hands-free mode.
 Temporary recognition failures are reported and the session continues. Spoken
 action requests still use Nova's existing confirmation requirement; answer
 `yes` or `no` during the next listening turn.
+
+For wake phrase mode, say the wake phrase and request together:
+
+```text
+voice-on
+wake-on
+```
+
+Then say `Nova, open Safari` or say `Nova`, wait for `Yes?`, and speak the
+request in the next listening window. Background speech without the wake phrase
+is ignored. Say `Nova, go to sleep` or press `Ctrl+C` to return to the prompt.
+Change the phrase with `wake-phrase Hey Nova`. After an action request, Nova
+accepts the required spoken `yes` or `no` without making you repeat the wake
+phrase.
 
 If you previously configured `voice-input`, run `voice-input-clear` to return to
 Nova's built-in on-device provider.
@@ -268,5 +285,5 @@ to `main`.
 
 ## Data compatibility
 
-Nova 6.2 keeps the Nova 5.5 SQLite schema and memory archive without
+Nova 6.3 keeps the Nova 5.5 SQLite schema and memory archive without
 requiring users to delete earlier Nova data.

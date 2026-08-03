@@ -124,6 +124,14 @@ class VoiceServiceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service.set_recognition_mode("online-only")
 
+    def test_wake_phrase_is_validated_and_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, _ = self.make_service(Path(directory))
+            service.set_wake_phrase("Hey Nova")
+            self.assertEqual(service.status()["wake_phrase"], "Hey Nova")
+            with self.assertRaises(ValueError):
+                service.set_wake_phrase("this phrase has too many words")
+
     def test_application_can_listen_respond_and_speak(self):
         with tempfile.TemporaryDirectory() as directory:
             app = NovaApplication(base_dir=Path(directory))

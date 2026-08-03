@@ -23,6 +23,7 @@ DEFAULT_SETTINGS = {
         "locale": "en-US",
         "listen_seconds": 7,
         "recognition_mode": "on-device",
+        "wake_phrase": "Nova",
     },
     "actions": {
         "enabled": False,
