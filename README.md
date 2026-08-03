@@ -1,4 +1,4 @@
-# Nova 7.4
+# Nova 7.5
 
 Nova is a local, conversational AI assistant for macOS. It uses Ollama for
 language-model responses and SQLite for persistent conversation, semantic, and
@@ -33,6 +33,9 @@ episodic memory.
 - Global Option-Space quick access and optional launch at login
 - Guided first-launch setup for Nova Core, voice permissions, Google Calendar,
   privacy, computer actions, and launch at login
+- Standalone Apple-silicon macOS app with Nova Core and Python dependencies
+  embedded inside the bundle
+- Drag-to-Applications DMG installer and native Nova orb app icon
 - Floating Glass native interface with an animated, transparent Nova orb
 - Functional Voice, Chat/History, and Settings navigation
 - Native controls for voice, spoken replies, memory privacy, live information,
@@ -91,14 +94,32 @@ Then start Nova in another terminal:
 The launcher automatically uses `.venv/bin/python` when the virtual
 environment exists. Set `PYTHON_BIN` to override it.
 
-## Start the macOS app
+## Build the standalone macOS app
 
-Build the signed local app after installing and opening Xcode once:
+Install the development dependencies and build the locally signed app after
+installing and opening Xcode once:
 
 ```bash
+.venv/bin/python -m pip install --requirement requirements-dev.txt
 ./scripts/build_macos_app.sh
 open dist/Nova.app
 ```
+
+The resulting `dist/Nova.app` contains Nova Core, its Python runtime, Requests,
+SQLite support, and the speech-helper source. It does not depend on the project
+folder or `.venv` at runtime. This build currently targets Apple-silicon Macs.
+Ollama remains a separate local service and must be installed with the
+`llama3.2` model.
+
+To create the drag-to-Applications installer:
+
+```bash
+./scripts/build_macos_dmg.sh
+```
+
+Open `dist/Nova-7.5.0.dmg`, then drag Nova into Applications. These local builds
+are ad-hoc signed for development; public distribution will require an Apple
+Developer ID signature and notarization.
 
 Nova appears as a sparkles icon in the menu bar and opens a native chat window.
 The first launch opens a guided setup that checks Nova Core and lets you choose
@@ -107,13 +128,12 @@ can be skipped, and the guide can be reopened from **Settings > Setup**.
 Closing the window hides it without stopping Nova. Press `Option-Space` from any
 app to bring the chat back immediately, or choose **Open Nova** from the menu.
 Enable **Launch at Login** there to start Nova automatically when you sign in.
-Choose **Quit Nova** to stop both the interface and its Python engine. The app uses the existing
-`.venv`, Ollama connection, `~/.nova4` data, memory, permissions, and actions.
+Choose **Quit Nova** to stop both the interface and its embedded Nova Core. The
+app uses the existing Ollama connection and `~/.nova4` data, memories, settings,
+permissions, and actions.
 The terminal launcher remains available and unchanged.
 
-The local bundle records the repository location at build time, so rebuild the
-app after moving the Nova project. Generated app bundles under `dist/` are not
-committed.
+Generated app bundles and installer images under `dist/` are not committed.
 
 The command-center interface starts in Voice mode. Use the microphone button for
 one local transcript or switch to Chat to see recent history and type. Pending
@@ -126,15 +146,19 @@ The Google Calendar card reads only Google or Google Workspace calendars already
 connected under **System Settings > Internet Accounts**. Click the card once to
 grant Nova Calendar access. No Google password or OAuth secret is stored by Nova.
 
-### Nova 7.4 interface
+### Nova 7.5 interface
 
-Nova 7.4 retains the Floating Glass design with an atmospheric indigo
+Nova 7.5 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
 cyan rings while listening, and displays a moving purple/cyan waveform while
 Nova is speaking. A matching five-step setup guide now helps new users configure
 the local engine, microphone and speech recognition, Google Calendar, privacy,
 confirmed actions, and launch at login.
+
+The app is now self-contained: its SwiftUI interface starts a frozen Nova Core
+from inside the application bundle. You can move Nova into Applications or run
+it from the DMG without keeping the repository beside it.
 
 The navigation rail opens Voice, Chat with persisted conversation history, and
 Settings. Settings provides native switches for voice mode, automatic spoken

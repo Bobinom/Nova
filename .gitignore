@@ -19,3 +19,4 @@ venv/
 
 # Native app builds
 dist/
+build/
