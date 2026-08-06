@@ -37,6 +37,7 @@ struct DashboardStatus {
     var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
     var wakeEnabled = false
     var wakePhrase = "Hey Nova"
+    var followUpEnabled = true
 }
 
 struct WeatherStatus {
@@ -183,6 +184,7 @@ final class NovaEngine: ObservableObject {
         case "voice.enabled": dashboard.voiceEnabled = enabled
         case "voice.auto_speak": dashboard.autoSpeak = enabled
         case "voice.wake_enabled": dashboard.wakeEnabled = enabled
+        case "voice.follow_up_enabled": dashboard.followUpEnabled = enabled
         case "actions.enabled": dashboard.actionsEnabled = enabled
         case "live.enabled": dashboard.liveInformationEnabled = enabled
         case "memory.episode_auto_save": dashboard.episodeAutoSave = enabled
@@ -412,6 +414,9 @@ final class NovaEngine: ObservableObject {
         case "wake_message":
             if let result = response["result"] as? [String: Any] {
                 applyConversationResult(result)
+                if result["follow_up_active"] as? Bool == true {
+                    wakeStatusMessage = "Conversation active — just keep talking."
+                }
                 if result["should_speak"] as? Bool == true,
                    let speech = result["speech_text"] as? String,
                    !speech.isEmpty {
@@ -487,7 +492,8 @@ final class NovaEngine: ObservableObject {
             elevenLabsVoiceID: voice["elevenlabs_voice_id"] as? String
                 ?? "GmM3ucvssIf0NWKHkiyc",
             wakeEnabled: voice["wake_enabled"] as? Bool ?? false,
-            wakePhrase: voice["wake_phrase"] as? String ?? "Hey Nova"
+            wakePhrase: voice["wake_phrase"] as? String ?? "Hey Nova",
+            followUpEnabled: voice["follow_up_enabled"] as? Bool ?? true
         )
     }
 
@@ -510,9 +516,24 @@ final class NovaEngine: ObservableObject {
                 return
             }
             messages.append(ChatMessage(role: .user, text: request))
-            wakeStatusMessage = "Heard: \(request)"
+            wakeStatusMessage = event["follow_up"] as? Bool == true
+                ? "Follow-up: \(request)"
+                : "Heard: \(request)"
             state = .thinking
             send(command: "wake_message", values: ["text": request])
+        case "conversation_end":
+            state = .ready
+            let spokenStop = event["reason"] as? String == "spoken_stop"
+            wakeStatusMessage = spokenStop
+                ? "Conversation ended. Listening for \(dashboard.wakePhrase)…"
+                : "Follow-up window closed. Listening for \(dashboard.wakePhrase)…"
+            if spokenStop {
+                resumeWakeAfterSpeech = true
+                state = .speaking
+                send(command: "speak", values: ["text": "Okay."])
+            } else {
+                scheduleWakeListen(delayNanoseconds: 180_000_000)
+            }
         case "sleep":
             dashboard.wakeEnabled = false
             wakeStatusMessage = "Hands-free listening is off."

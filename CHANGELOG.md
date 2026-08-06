@@ -2,6 +2,33 @@
 
 All notable Nova releases are documented here.
 
+## 7.8.0 - 2026-08-04
+
+### Added
+
+- Natural follow-up conversations in the standalone app after a wake request.
+- A persistent Voice Settings toggle for follow-up listening.
+- Wake-free follow-up questions, action confirmations, and contextual replies.
+- Spoken `stop`, `cancel`, `never mind`, and `that's all` conversation exits.
+- Plain `go to sleep` support while a follow-up conversation is active.
+- Tests for follow-up persistence, requests, stop phrases, and sleep behavior.
+
+### Changed
+
+- Nova opens one short listening window after each spoken answer and returns to
+  wake-phrase standby after silence.
+- The app clearly distinguishes wake requests from active follow-up speech.
+
+### Privacy
+
+- Follow-up listening uses the existing visible microphone state and configured
+  Apple Speech recognition mode. Raw microphone audio is not stored.
+
+### Preserved
+
+- Wake-only mode can be restored from Settings. Manual voice, text chat,
+  ElevenLabs, Ollama, SQLite memory, and confirmed actions remain compatible.
+
 ## 7.7.0 - 2026-08-03
 
 ### Added

@@ -274,6 +274,9 @@ class VoiceService:
             "wake_enabled": bool(
                 self.settings.get("voice.wake_enabled", False)
             ),
+            "follow_up_enabled": bool(
+                self.settings.get("voice.follow_up_enabled", True)
+            ),
             "voice": self.settings.get("voice.name", None),
             "rate": self._rate(),
         }
@@ -286,6 +289,9 @@ class VoiceService:
 
     def set_wake_enabled(self, enabled: bool) -> None:
         self.settings.set("voice.wake_enabled", enabled)
+
+    def set_follow_up_enabled(self, enabled: bool) -> None:
+        self.settings.set("voice.follow_up_enabled", enabled)
 
     def set_output_provider(self, provider: str) -> None:
         cleaned = provider.strip().lower()

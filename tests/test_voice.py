@@ -67,6 +67,17 @@ class VoiceServiceTests(unittest.TestCase):
             self.assertEqual(output.calls, [])
             self.assertFalse(service.status()["enabled"])
 
+    def test_natural_follow_up_is_enabled_by_default_and_persistent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            service, _ = self.make_service(root)
+
+            self.assertTrue(service.status()["follow_up_enabled"])
+            service.set_follow_up_enabled(False)
+
+            reloaded, _ = self.make_service(root)
+            self.assertFalse(reloaded.status()["follow_up_enabled"])
+
     def test_voice_speaks_with_persistent_rate_and_name(self):
         with tempfile.TemporaryDirectory() as directory:
             service, output = self.make_service(Path(directory))

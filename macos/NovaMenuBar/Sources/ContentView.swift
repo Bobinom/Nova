@@ -322,6 +322,14 @@ struct ContentView: View {
                             set: { engine.setWakeEnabled($0) }
                         )
                     )
+                    SettingsToggle(
+                        title: "Natural follow-up conversation",
+                        detail: "Keep listening briefly after each answer, without repeating the wake phrase.",
+                        isOn: preferenceBinding(
+                            "voice.follow_up_enabled",
+                            value: engine.dashboard.followUpEnabled
+                        )
+                    )
                     if !engine.wakeStatusMessage.isEmpty {
                         Label(
                             engine.wakeStatusMessage,
