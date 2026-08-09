@@ -21,6 +21,7 @@ from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 from nova.plugins.manager import PluginManager
+from nova.tasks.service import TaskService
 from nova.voice.service import VoiceService
 
 
@@ -36,6 +37,7 @@ class NovaStatus:
     schema_version: int = 0
     voice_enabled: bool = False
     actions_enabled: bool = False
+    open_tasks: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +51,7 @@ class NovaStatus:
             "schema_version": self.schema_version,
             "voice_enabled": self.voice_enabled,
             "actions_enabled": self.actions_enabled,
+            "open_tasks": self.open_tasks,
         }
 
 
@@ -63,6 +66,7 @@ class NovaApplication:
         self.actions = ActionService(self.settings)
         self.live = LiveInformationService(self.settings)
         self.voice = VoiceService(self.settings, data_dir=self.paths.data_dir)
+        self.tasks = TaskService(self.paths.database_file)
 
         self.events = EventBus(
             logger=self.logger,
@@ -93,6 +97,7 @@ class NovaApplication:
             settings=self.settings,
             actions=self.actions,
             live=self.live,
+            tasks=self.tasks,
         )
 
         self._running = False
@@ -156,6 +161,7 @@ class NovaApplication:
             schema_version=int(health["schema_version"]),
             voice_enabled=bool(self.voice.status()["enabled"]),
             actions_enabled=bool(self.actions.status()["enabled"]),
+            open_tasks=len(self.tasks.list()),
         ).as_dict()
 
     def handle_message(self, text: str) -> dict[str, Any]:
@@ -193,6 +199,10 @@ class NovaApplication:
             "conversation_turns": len(self.conversation.history(1000)),
             "conversation_episodes": len(self.conversation.episodes(1000)),
             "conversation_sessions": len(self.conversation.sessions(1000)),
+            "assistant_tasks": len(
+                self.tasks.list(include_finished=True, limit=500)
+            ),
+            "open_assistant_tasks": len(self.tasks.list(limit=500)),
             "privacy": self.conversation.privacy_status(),
             "live_information": self.live.status(),
         }

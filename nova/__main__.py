@@ -171,6 +171,12 @@ def main() -> None:
     print("  actions-status")
     print("  actions-on | actions-off")
     print("  action-websites <on|off>")
+    print("  tasks")
+    print("  task-add <title>")
+    print("  task-start <id>")
+    print("  task-complete <id>")
+    print("  task-cancel <id>")
+    print("  task-delete <id>")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -349,6 +355,61 @@ def main() -> None:
                 else:
                     app.actions.set_websites_enabled(value == "on")
                     print(f"Website actions {value}.")
+                continue
+
+            if raw == "tasks":
+                tasks = app.tasks.list()
+                if not tasks:
+                    print("No open tasks.")
+                else:
+                    for task in tasks:
+                        print(
+                            f"[{task['id']}] {task['status']}: "
+                            f"{task['title']} ({task['project']})"
+                        )
+                continue
+
+            if raw.startswith("task-add "):
+                try:
+                    task = app.tasks.create(raw[len("task-add "):])
+                except ValueError as exc:
+                    print(f"Task not added: {exc}")
+                else:
+                    print(f"Task {task['id']} added: {task['title']}")
+                continue
+
+            task_commands = {
+                "task-start ": "in_progress",
+                "task-complete ": "completed",
+                "task-cancel ": "cancelled",
+            }
+            task_command = next(
+                (prefix for prefix in task_commands if raw.startswith(prefix)),
+                None,
+            )
+            if task_command is not None:
+                task_id = raw[len(task_command):].strip()
+                if not task_id.isdigit():
+                    print("Task ID must be a number.")
+                else:
+                    try:
+                        task = app.tasks.set_status(
+                            int(task_id),
+                            task_commands[task_command],
+                        )
+                    except ValueError as exc:
+                        print(exc)
+                    else:
+                        print(f"Task {task['id']} is now {task['status']}.")
+                continue
+
+            if raw.startswith("task-delete "):
+                task_id = raw[len("task-delete "):].strip()
+                if not task_id.isdigit():
+                    print("Task ID must be a number.")
+                else:
+                    deleted = app.tasks.delete(int(task_id))
+                    print("Task deleted." if deleted else "Task not found.")
                 continue
 
             if raw in {"memory", "memories"}:

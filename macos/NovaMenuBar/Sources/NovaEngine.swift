@@ -17,6 +17,13 @@ struct PendingAction {
     let target: String
 }
 
+struct AssistantTask: Identifiable {
+    let id: Int
+    let title: String
+    let status: String
+    let project: String
+}
+
 struct DashboardStatus {
     var version = ""
     var memories = 0
@@ -38,6 +45,8 @@ struct DashboardStatus {
     var wakeEnabled = false
     var wakePhrase = "Hey Nova"
     var followUpEnabled = true
+    var tasks: [AssistantTask] = []
+    var personality = "jarvis"
 }
 
 struct WeatherStatus {
@@ -177,6 +186,28 @@ final class NovaEngine: ObservableObject {
         guard state.isAvailable, !weather.isLoading else { return }
         weather.isLoading = true
         send(command: "weather")
+    }
+
+    func addTask(_ title: String) {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, state.isAvailable else { return }
+        send(command: "task_create", values: ["title": cleaned])
+    }
+
+    func completeTask(_ taskID: Int) {
+        guard state.isAvailable else { return }
+        send(
+            command: "task_status",
+            values: ["task_id": taskID, "status": "completed"]
+        )
+    }
+
+    func setPersonality(_ personality: String) {
+        dashboard.personality = personality
+        send(
+            command: "set_personality",
+            values: ["personality": personality]
+        )
     }
 
     func setPreference(_ key: String, enabled: Bool) {
@@ -330,7 +361,7 @@ final class NovaEngine: ObservableObject {
         if response["shutdown"] as? Bool == true { return }
 
         switch command {
-        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider":
+        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider", "set_personality":
             if let result = response["result"] as? [String: Any] {
                 updateDashboard(result)
             }
@@ -440,6 +471,8 @@ final class NovaEngine: ObservableObject {
             } else {
                 weather.isLoading = false
             }
+        case "task_create", "task_status", "task_delete":
+            send(command: "dashboard")
         default:
             state = .ready
         }
@@ -466,6 +499,7 @@ final class NovaEngine: ObservableObject {
         let actions = result["actions"] as? [String: Any] ?? [:]
         let live = result["live_information"] as? [String: Any] ?? [:]
         let privacy = result["privacy"] as? [String: Any] ?? [:]
+        let taskValues = result["tasks"] as? [[String: Any]] ?? []
         dashboard = DashboardStatus(
             version: status["version"] as? String ?? "",
             memories: status["memories"] as? Int ?? 0,
@@ -493,7 +527,18 @@ final class NovaEngine: ObservableObject {
                 ?? "GmM3ucvssIf0NWKHkiyc",
             wakeEnabled: voice["wake_enabled"] as? Bool ?? false,
             wakePhrase: voice["wake_phrase"] as? String ?? "Hey Nova",
-            followUpEnabled: voice["follow_up_enabled"] as? Bool ?? true
+            followUpEnabled: voice["follow_up_enabled"] as? Bool ?? true,
+            tasks: taskValues.compactMap { task in
+                guard let id = task["id"] as? Int,
+                      let title = task["title"] as? String else { return nil }
+                return AssistantTask(
+                    id: id,
+                    title: title,
+                    status: task["status"] as? String ?? "open",
+                    project: task["project"] as? String ?? "Inbox"
+                )
+            },
+            personality: result["personality"] as? String ?? "jarvis"
         )
     }
 

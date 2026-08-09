@@ -2,6 +2,36 @@
 
 All notable Nova releases are documented here.
 
+## 8.0.0 - 2026-08-09
+
+### Added
+
+- A persistent Assistant Workspace backed by Nova's existing SQLite database.
+- Task creation, listing, starting, completing, cancelling, and deletion.
+- Deterministic natural-language task commands that work in chat and voice.
+- A native Tasks dashboard card with quick creation and completion controls.
+- Matching task commands for the terminal and structured GUI bridge.
+- Concise, Warm, and Jarvis personality profiles in native Settings.
+- Database migration 4 and lifecycle, routing, persistence, and bridge tests.
+
+### Changed
+
+- Nova status now reports open task count, and the dashboard includes the five
+  highest-priority active tasks.
+- The Jarvis profile adds composed, capable, subtly witty language while keeping
+  factual honesty and verified action boundaries explicit.
+
+### Privacy and safety
+
+- Tasks remain local in Nova's database and are covered by existing backups.
+- Personality changes affect response style only; they do not grant permissions,
+  bypass confirmations, or let Nova claim unverified work.
+
+### Foundation
+
+- The task workspace provides durable project state for future creative design,
+  3D-model validation, slicing, and explicitly approved printer workflows.
+
 ## 7.8.0 - 2026-08-04
 
 ### Added

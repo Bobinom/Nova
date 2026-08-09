@@ -208,6 +208,21 @@ The app separates microphone capture from speech playback so these animations
 follow Nova's actual voice state. This native bridge change does not alter the
 terminal `listen`, hands-free conversation, or wake-phrase commands.
 
+### Assistant workspace
+
+Nova 8 adds persistent local tasks to the native dashboard and terminal. Add a
+task from the Tasks card, click its circle to complete it, or speak/type natural
+commands such as `Add a task to sketch a phone stand`, `show my tasks`, `start
+task 1`, and `complete task 1`. Tasks live in Nova's existing SQLite database,
+survive restarts, and are included in normal verified backups.
+
+Settings also offers **Concise**, **Warm**, and **Jarvis** personality profiles.
+The Jarvis profile is composed, perceptive, capable, and subtly witty, while
+remaining honest about unverified work and preserving all action confirmations.
+
+Terminal commands include `tasks`, `task-add <title>`, `task-start <id>`,
+`task-complete <id>`, `task-cancel <id>`, and `task-delete <id>`.
+
 The glass **Suggested** card can request current local weather from Open-Meteo. Nova uses
 the exact `user.location` fact you previously saved, and sends it only when you
 click **Refresh local weather** or explicitly ask a weather question. Live web

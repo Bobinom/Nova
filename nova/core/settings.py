@@ -33,6 +33,7 @@ DEFAULT_SETTINGS = {
             "Music", "Notes", "Safari", "System Settings",
         ],
     },
+    "assistant": {"personality": "jarvis"},
     "plugins": {"enabled": True}
 }
 
