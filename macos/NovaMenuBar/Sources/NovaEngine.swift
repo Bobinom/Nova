@@ -504,6 +504,10 @@ final class NovaEngine: ObservableObject {
         if let reply = result["response"] as? String {
             messages.append(ChatMessage(role: .nova, text: reply))
         }
+        if let intent = result["intent"] as? String,
+           intent.hasPrefix("task_") {
+            send(command: "dashboard")
+        }
         if result["action_status"] as? String == "pending_confirmation",
            let action = result["action"] as? [String: Any] {
             actionProgressMessage = ""
