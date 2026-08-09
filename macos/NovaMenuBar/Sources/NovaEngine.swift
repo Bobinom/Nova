@@ -87,6 +87,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var state: State = .starting
     @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var pendingAction: PendingAction?
+    @Published private(set) var actionProgressMessage = ""
     @Published private(set) var dashboard = DashboardStatus()
     @Published private(set) var weather = WeatherStatus()
     @Published private(set) var voiceSetupMessage = ""
@@ -166,6 +167,7 @@ final class NovaEngine: ObservableObject {
     func sendMessage(_ text: String) {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, state.isReady else { return }
+        preparePendingActionResponse(cleaned)
         if dashboard.wakeEnabled {
             pauseWakeListening()
             resumeWakeAfterResponse = true
@@ -294,8 +296,25 @@ final class NovaEngine: ObservableObject {
 
     private func respondToAction(_ response: String) {
         guard pendingAction != nil, state.isReady else { return }
+        preparePendingActionResponse(response)
         state = .thinking
         send(command: "message", values: ["text": response])
+    }
+
+    private func preparePendingActionResponse(_ response: String) {
+        guard let action = pendingAction else { return }
+        let normalized = response
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let confirmations = ["yes", "confirm", "do it", "go ahead"]
+        let cancellations = ["no", "cancel", "stop", "never mind", "nevermind"]
+        if confirmations.contains(normalized) {
+            pendingAction = nil
+            actionProgressMessage = "Working on it — \(action.description)…"
+        } else if cancellations.contains(normalized) {
+            pendingAction = nil
+            actionProgressMessage = "Cancelling action…"
+        }
     }
 
     private func bundledCoreURL() -> URL? {
@@ -341,6 +360,9 @@ final class NovaEngine: ObservableObject {
         let command = pendingCommands.removeValue(forKey: id) ?? ""
         guard response["ok"] as? Bool == true else {
             let error = response["error"] as? String ?? "Unknown bridge error"
+            if command == "message" || command == "wake_message" {
+                actionProgressMessage = ""
+            }
             if command == "dashboard" {
                 state = .unavailable(error)
             } else if command == "weather" {
@@ -484,12 +506,14 @@ final class NovaEngine: ObservableObject {
         }
         if result["action_status"] as? String == "pending_confirmation",
            let action = result["action"] as? [String: Any] {
+            actionProgressMessage = ""
             pendingAction = PendingAction(
                 description: action["description"] as? String ?? "Confirm action",
                 target: action["target"] as? String ?? "Nova action"
             )
         } else if result["action_status"] != nil {
             pendingAction = nil
+            actionProgressMessage = ""
         }
     }
 
@@ -561,6 +585,7 @@ final class NovaEngine: ObservableObject {
                 return
             }
             messages.append(ChatMessage(role: .user, text: request))
+            preparePendingActionResponse(request)
             wakeStatusMessage = event["follow_up"] as? Bool == true
                 ? "Follow-up: \(request)"
                 : "Heard: \(request)"

@@ -57,6 +57,9 @@ struct ContentView: View {
                     if !showingSettings, let action = engine.pendingAction {
                         ActionConfirmationCard(action: action)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if !showingSettings, !engine.actionProgressMessage.isEmpty {
+                        ActionProgressCard(message: engine.actionProgressMessage)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
                     if !showingSettings, mode == .voice {
@@ -74,6 +77,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.24), value: mode)
         .animation(.easeInOut(duration: 0.22), value: engine.pendingAction != nil)
+        .animation(.easeInOut(duration: 0.22), value: engine.actionProgressMessage)
         .sheet(
             isPresented: Binding(
                 get: { !onboardingCompleted || showingOnboarding },
@@ -1052,6 +1056,26 @@ private struct ActionConfirmationCard: View {
                 .tint(novaPurple)
             Button("Cancel", action: engine.cancelAction)
                 .buttonStyle(.bordered)
+        }
+        .padding(13)
+        .background(panelBackground)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(panelBorder, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct ActionProgressCard: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(novaCyan)
+            Text(message)
+                .font(.callout)
+                .lineLimit(1)
+            Spacer()
         }
         .padding(13)
         .background(panelBackground)
