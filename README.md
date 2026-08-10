@@ -227,7 +227,8 @@ Terminal commands include `tasks`, `task-add <title>`, `task-start <id>`,
 
 ### Local supervisor agent
 
-Start an explicit planning run with `Agent: <goal>` in chat or voice. Nova uses
+Start a planning run with `Agent: <goal>` or a clear phrase such as `Prepare me
+for ...`, `Help me plan ...`, or `Break ... into tasks`. Nova uses
 Pydantic AI with the local `qwen2.5:1.5b` Ollama model to produce a validated,
 bounded plan of up to eight steps, then saves those steps in the existing Tasks
 workspace. For example: `Agent: prepare me for a productive day tomorrow`.

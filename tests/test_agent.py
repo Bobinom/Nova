@@ -67,6 +67,24 @@ class SupervisorAgentTests(unittest.TestCase):
             self.assertEqual(result, {"handled": False})
             self.assertEqual(planner.goals, [])
 
+    def test_natural_prepare_request_activates_agent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            planner = RecordingPlanner(self.make_plan())
+            app.agent.planner = planner
+
+            result = app.handle_message(
+                "Prepare me for a productive day tomorrow"
+            )
+
+            self.assertEqual(result["intent"], "agent_plan_created")
+            self.assertEqual(
+                planner.goals,
+                ["Prepare me for a productive day tomorrow"],
+            )
+            app.stop()
+
     def test_agent_planning_failure_creates_no_tasks(self):
         with tempfile.TemporaryDirectory() as directory:
             app = NovaApplication(base_dir=Path(directory))

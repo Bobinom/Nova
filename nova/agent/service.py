@@ -66,9 +66,17 @@ computer control without stating that Nova must request user confirmation first.
 class SupervisorAgent:
     """A bounded agent that plans explicit goals into Nova's local task list."""
 
-    _REQUEST = re.compile(
-        r"^(?:(?:hey\s+)?nova[, ]+)?agent(?:\s+mode)?\s*[:,-]?\s+(.+)$",
-        re.IGNORECASE,
+    _REQUESTS = (
+        re.compile(
+            r"^(?:(?:hey\s+)?nova[, ]+)?agent(?:\s+mode)?\s*[:,-]?\s+(.+)$",
+            re.IGNORECASE,
+        ),
+        re.compile(r"^(prepare me for\s+.+)$", re.IGNORECASE),
+        re.compile(r"^(?:help me\s+)?plan\s+(.+)$", re.IGNORECASE),
+        re.compile(
+            r"^(?:break|turn)\s+(.+?)\s+into\s+(?:a\s+)?tasks?$",
+            re.IGNORECASE,
+        ),
     )
 
     def __init__(
@@ -89,7 +97,12 @@ class SupervisorAgent:
         }
 
     def process(self, text: str) -> dict[str, Any]:
-        match = self._REQUEST.fullmatch(text.strip())
+        cleaned = text.strip()
+        match = next(
+            (pattern.fullmatch(cleaned) for pattern in self._REQUESTS
+             if pattern.fullmatch(cleaned) is not None),
+            None,
+        )
         if match is None:
             return {"handled": False}
 
