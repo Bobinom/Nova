@@ -2,7 +2,7 @@
 
 All notable Nova releases are documented here.
 
-## Unreleased
+## 8.1.0 - 2026-08-10
 
 ### Added
 
@@ -11,6 +11,9 @@ All notable Nova releases are documented here.
 - A dedicated `qwen2.5:1.5b` Ollama planning model, selected after local
   benchmarking against the larger conversation model.
 - Agent availability and provider details in the native dashboard bridge.
+- Persistent agent runs with start, status, step completion, pause, resume, and
+  cancellation controls in both chat and voice.
+- Active-plan progress in the native Tasks card, restored after app restarts.
 
 ### Privacy and safety
 
@@ -18,6 +21,8 @@ All notable Nova releases are documented here.
   file, messaging, purchasing, printing, or computer-control tools.
 - Existing deterministic memory, tasks, live information, and confirmed action
   routes retain priority over the agent.
+- Advancing a plan only changes local task state; computer actions still use
+  Nova's existing explicit confirmation flow.
 
 ## 8.0.0 - 2026-08-09
 

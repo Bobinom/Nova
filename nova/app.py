@@ -7,6 +7,7 @@ from typing import Any
 
 from nova import __version__
 from nova.agent.service import SupervisorAgent
+from nova.agent.repository import AgentRunRepository
 from nova.actions.service import ActionService
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
@@ -68,7 +69,8 @@ class NovaApplication:
         self.live = LiveInformationService(self.settings)
         self.voice = VoiceService(self.settings, data_dir=self.paths.data_dir)
         self.tasks = TaskService(self.paths.database_file)
-        self.agent = SupervisorAgent(self.tasks)
+        self.agent_runs = AgentRunRepository(self.paths.database_file)
+        self.agent = SupervisorAgent(self.tasks, runs=self.agent_runs)
 
         self.events = EventBus(
             logger=self.logger,

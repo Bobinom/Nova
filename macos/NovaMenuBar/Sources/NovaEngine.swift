@@ -46,6 +46,10 @@ struct DashboardStatus {
     var wakePhrase = "Hey Nova"
     var followUpEnabled = true
     var tasks: [AssistantTask] = []
+    var agentStatus = "idle"
+    var agentObjective = ""
+    var agentProgress = ""
+    var agentCurrentStep = ""
     var personality = "jarvis"
 }
 
@@ -505,7 +509,7 @@ final class NovaEngine: ObservableObject {
             messages.append(ChatMessage(role: .nova, text: reply))
         }
         if let intent = result["intent"] as? String,
-           intent.hasPrefix("task_") || intent.hasPrefix("agent_plan_") {
+           intent.hasPrefix("task_") || intent.hasPrefix("agent_") {
             send(command: "dashboard")
         }
         if result["action_status"] as? String == "pending_confirmation",
@@ -527,6 +531,7 @@ final class NovaEngine: ObservableObject {
         let actions = result["actions"] as? [String: Any] ?? [:]
         let live = result["live_information"] as? [String: Any] ?? [:]
         let privacy = result["privacy"] as? [String: Any] ?? [:]
+        let agent = result["agent"] as? [String: Any] ?? [:]
         let taskValues = result["tasks"] as? [[String: Any]] ?? []
         dashboard = DashboardStatus(
             version: status["version"] as? String ?? "",
@@ -566,6 +571,10 @@ final class NovaEngine: ObservableObject {
                     project: task["project"] as? String ?? "Inbox"
                 )
             },
+            agentStatus: agent["run_status"] as? String ?? "idle",
+            agentObjective: agent["objective"] as? String ?? "",
+            agentProgress: agent["progress"] as? String ?? "",
+            agentCurrentStep: agent["current_step"] as? String ?? "",
             personality: result["personality"] as? String ?? "jarvis"
         )
     }

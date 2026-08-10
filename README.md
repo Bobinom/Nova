@@ -233,6 +233,11 @@ Pydantic AI with the local `qwen2.5:1.5b` Ollama model to produce a validated,
 bounded plan of up to eight steps, then saves those steps in the existing Tasks
 workspace. For example: `Agent: prepare me for a productive day tomorrow`.
 
+Nova can then guide the plan one step at a time. Say `start my plan`, `complete
+current step`, `pause my plan`, `resume my plan`, `cancel my plan`, or `agent
+status`. The active step and progress persist across restarts and appear in the
+native Tasks card.
+
 The planning agent cannot run shell commands, change files, send messages,
 purchase anything, or bypass Nova's existing computer-action confirmations.
 Ordinary conversation and deterministic task, memory, live-information, and
@@ -336,6 +341,10 @@ Continue our PC upgrade discussion.
 | `task-cancel <id>` | Cancel a task |
 | `task-delete <id>` | Permanently delete a task |
 | `agent <goal>` | Create a validated local plan and add its steps to Tasks |
+| `start my plan` / `resume my plan` | Start or resume the next plan step |
+| `complete current step` | Finish the active step and advance safely |
+| `pause my plan` / `cancel my plan` | Pause or cancel the active plan |
+| `agent status` | Show persisted plan progress and the active step |
 | `quit` | Stop Nova safely |
 
 ## Voice and actions

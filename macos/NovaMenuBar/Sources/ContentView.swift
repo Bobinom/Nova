@@ -241,6 +241,14 @@ struct ContentView: View {
             }
 
             GlassCard(icon: "checklist", title: "Tasks") {
+                if engine.dashboard.agentStatus != "idle" {
+                    Text(engine.dashboard.agentObjective)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(engine.dashboard.agentStatus.capitalized) • \(engine.dashboard.agentProgress)")
+                        .font(.caption2)
+                        .foregroundStyle(novaCyan)
+                }
                 if engine.dashboard.tasks.isEmpty {
                     Text("Your workspace is clear")
                         .font(.title3.weight(.medium))
