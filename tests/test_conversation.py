@@ -823,6 +823,27 @@ class ConversationTests(unittest.TestCase):
             manager.close()
             memory.close()
 
+    def test_personality_profile_is_persisted_and_injected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SettingsManager(Path(directory) / "settings.json")
+            settings.load()
+            llm = RecordingLLM()
+            manager, memory = self.make_manager(
+                Path(directory) / "nova.db",
+                llm=llm,
+                settings=settings,
+            )
+
+            manager.set_personality("warm")
+            manager.handle("Help me plan a creative project")
+
+            self.assertEqual(settings.get("assistant.personality"), "warm")
+            self.assertIn("warm, encouraging", llm.calls[-1][0])
+            with self.assertRaisesRegex(ValueError, "Personality"):
+                manager.set_personality("unsafe")
+            manager.close()
+            memory.close()
+
 
 if __name__ == "__main__":
     unittest.main()

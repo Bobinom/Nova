@@ -55,6 +55,26 @@ class NovaGUIBridge:
         elif command == "history":
             limit = max(1, min(int(request.get("limit", 30)), 100))
             response["result"] = self.app.conversation.history(limit)
+        elif command == "tasks":
+            response["result"] = self.app.tasks.list(
+                include_finished=bool(request.get("include_finished", False)),
+            )
+        elif command == "task_create":
+            response["result"] = self.app.tasks.create(
+                str(request.get("title", "")),
+                details=str(request.get("details", "")),
+                project=str(request.get("project", "Inbox")),
+                priority=int(request.get("priority", 0)),
+            )
+        elif command == "task_status":
+            response["result"] = self.app.tasks.set_status(
+                int(request.get("task_id", 0)),
+                str(request.get("status", "")),
+            )
+        elif command == "task_delete":
+            response["result"] = {
+                "deleted": self.app.tasks.delete(int(request.get("task_id", 0)))
+            }
         elif command == "listen":
             response["result"] = self.app.listen_and_respond()
         elif command == "listen_gui":
@@ -110,6 +130,11 @@ class NovaGUIBridge:
             response["result"] = self._dashboard()
         elif command == "test_voice":
             response["result"] = self.app.voice.test_output()
+        elif command == "set_personality":
+            self.app.conversation.set_personality(
+                str(request.get("personality", ""))
+            )
+            response["result"] = self._dashboard()
         elif command == "dashboard":
             response["result"] = self._dashboard()
         elif command == "set_preference":
@@ -322,6 +347,12 @@ class NovaGUIBridge:
             "privacy": self.app.conversation.privacy_status(),
             "live_information": self.app.live.status(),
             "ollama_model": "llama3.2",
+            "agent": self.app.agent.status(),
+            "tasks": self.app.tasks.list(limit=5),
+            "personality": self.app.settings.get(
+                "assistant.personality",
+                "jarvis",
+            ),
         }
 
 

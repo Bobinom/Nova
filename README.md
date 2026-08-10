@@ -57,12 +57,14 @@ episodic memory.
 - Python 3.12
 - Xcode for building the native Nova app
 - Apple Command Line Tools (`xcode-select --install`) for terminal-only microphone setup
-- [Ollama](https://ollama.com/) with the `llama3.2` model
+- [Ollama](https://ollama.com/) with the `llama3.2` conversation model and
+  `qwen2.5:1.5b` planning model
 
 Install the Ollama model once:
 
 ```bash
 ollama pull llama3.2
+ollama pull qwen2.5:1.5b
 ```
 
 ## Setup
@@ -208,6 +210,34 @@ The app separates microphone capture from speech playback so these animations
 follow Nova's actual voice state. This native bridge change does not alter the
 terminal `listen`, hands-free conversation, or wake-phrase commands.
 
+### Assistant workspace
+
+Nova 8 adds persistent local tasks to the native dashboard and terminal. Add a
+task from the Tasks card, click its circle to complete it, or speak/type natural
+commands such as `Add a task to sketch a phone stand`, `show my tasks`, `start
+task 1`, and `complete task 1`. Tasks live in Nova's existing SQLite database,
+survive restarts, and are included in normal verified backups.
+
+Settings also offers **Concise**, **Warm**, and **Jarvis** personality profiles.
+The Jarvis profile is composed, perceptive, capable, and subtly witty, while
+remaining honest about unverified work and preserving all action confirmations.
+
+Terminal commands include `tasks`, `task-add <title>`, `task-start <id>`,
+`task-complete <id>`, `task-cancel <id>`, and `task-delete <id>`.
+
+### Local supervisor agent
+
+Start a planning run with `Agent: <goal>` or a clear phrase such as `Prepare me
+for ...`, `Help me plan ...`, or `Break ... into tasks`. Nova uses
+Pydantic AI with the local `qwen2.5:1.5b` Ollama model to produce a validated,
+bounded plan of up to eight steps, then saves those steps in the existing Tasks
+workspace. For example: `Agent: prepare me for a productive day tomorrow`.
+
+The planning agent cannot run shell commands, change files, send messages,
+purchase anything, or bypass Nova's existing computer-action confirmations.
+Ordinary conversation and deterministic task, memory, live-information, and
+action routes continue to run before the agent path.
+
 The glass **Suggested** card can request current local weather from Open-Meteo. Nova uses
 the exact `user.location` fact you previously saved, and sends it only when you
 click **Refresh local weather** or explicitly ask a weather question. Live web
@@ -299,6 +329,13 @@ Continue our PC upgrade discussion.
 | `actions-status` | Show action permissions and pending confirmation |
 | `actions-on` / `actions-off` | Enable or disable computer actions |
 | `action-websites <on\|off>` | Allow or block confirmed website actions |
+| `tasks` | List active local tasks |
+| `task-add <title>` | Add a task directly |
+| `task-start <id>` | Mark a task as in progress |
+| `task-complete <id>` | Complete a task |
+| `task-cancel <id>` | Cancel a task |
+| `task-delete <id>` | Permanently delete a task |
+| `agent <goal>` | Create a validated local plan and add its steps to Tasks |
 | `quit` | Stop Nova safely |
 
 ## Voice and actions

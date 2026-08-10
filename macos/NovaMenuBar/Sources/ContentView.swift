@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
     @State private var mode: InterfaceMode = .voice
     @State private var input = ""
+    @State private var newTaskTitle = ""
     @State private var showingSettings = false
 
     var body: some View {
@@ -56,6 +57,9 @@ struct ContentView: View {
                     if !showingSettings, let action = engine.pendingAction {
                         ActionConfirmationCard(action: action)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if !showingSettings, !engine.actionProgressMessage.isEmpty {
+                        ActionProgressCard(message: engine.actionProgressMessage)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
                     if !showingSettings, mode == .voice {
@@ -73,6 +77,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.24), value: mode)
         .animation(.easeInOut(duration: 0.22), value: engine.pendingAction != nil)
+        .animation(.easeInOut(duration: 0.22), value: engine.actionProgressMessage)
         .sheet(
             isPresented: Binding(
                 get: { !onboardingCompleted || showingOnboarding },
@@ -235,30 +240,55 @@ struct ContentView: View {
                     .foregroundStyle(novaCyan)
             }
 
-            GlassCard(icon: "sparkles", title: "Suggested") {
-                Text("Check your local weather")
-                    .font(.title3.weight(.medium))
-                Text(
-                    engine.weather.summary.isEmpty
-                        ? "Use your saved location for a live update."
-                        : engine.weather.summary
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(4)
-                Spacer(minLength: 4)
-                Button(action: engine.refreshWeather) {
-                    Label(
-                        engine.weather.isLoading ? "Loading…" : "Refresh weather",
-                        systemImage: "arrow.right"
-                    )
+            GlassCard(icon: "checklist", title: "Tasks") {
+                if engine.dashboard.tasks.isEmpty {
+                    Text("Your workspace is clear")
+                        .font(.title3.weight(.medium))
+                    Text("Add a task for Nova to track locally.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(engine.dashboard.tasks.prefix(3)) { task in
+                        Button {
+                            engine.completeTask(task.id)
+                        } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: task.status == "in_progress" ? "circle.dotted" : "circle")
+                                    .foregroundStyle(novaCyan)
+                                Text(task.title)
+                                    .font(.caption)
+                                    .lineLimit(2)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Mark task complete")
+                    }
                 }
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(novaCyan)
-                .disabled(!engine.dashboard.liveInformationEnabled || engine.weather.isLoading)
+                Spacer(minLength: 4)
+                HStack(spacing: 7) {
+                    TextField("New task…", text: $newTaskTitle)
+                        .textFieldStyle(.plain)
+                        .onSubmit(addTask)
+                    Button(action: addTask) {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(novaPurple)
+                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(8)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
             }
         }
+    }
+
+    private func addTask() {
+        let title = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        engine.addTask(title)
+        newTaskTitle = ""
     }
 
     private var floatingComposer: some View {
@@ -401,6 +431,26 @@ struct ContentView: View {
                         }
                     }
                     .padding(.top, 4)
+                }
+
+                SettingsGroup(title: "Personality", icon: "theatermasks") {
+                    Picker(
+                        "Nova's style",
+                        selection: Binding(
+                            get: { engine.dashboard.personality },
+                            set: { engine.setPersonality($0) }
+                        )
+                    ) {
+                        Text("Concise").tag("concise")
+                        Text("Warm").tag("warm")
+                        Text("Jarvis").tag("jarvis")
+                    }
+                    .pickerStyle(.segmented)
+                    Text(
+                        "Jarvis is composed, perceptive, capable, and subtly witty—without pretending Nova completed actions it could not verify."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 SettingsGroup(title: "Privacy & memory", icon: "lock.shield") {
@@ -1006,6 +1056,26 @@ private struct ActionConfirmationCard: View {
                 .tint(novaPurple)
             Button("Cancel", action: engine.cancelAction)
                 .buttonStyle(.bordered)
+        }
+        .padding(13)
+        .background(panelBackground)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(panelBorder, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct ActionProgressCard: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(novaCyan)
+            Text(message)
+                .font(.callout)
+                .lineLimit(1)
+            Spacer()
         }
         .padding(13)
         .background(panelBackground)

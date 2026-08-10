@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from nova.actions.service import ActionService
+from nova.agent.service import SupervisorAgent
 from nova.conversation.intent import Intent, classify
 from nova.conversation.models import ConversationEpisode, ConversationSession
 from nova.conversation.repository import ConversationRepository
@@ -14,6 +15,7 @@ from nova.llm.prompts import NOVA_SYSTEM_PROMPT
 from nova.llm.service import LLMService
 from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
+from nova.tasks.service import TaskService
 
 
 class ConversationManager:
@@ -60,6 +62,8 @@ class ConversationManager:
         settings: SettingsManager | None = None,
         actions: ActionService | None = None,
         live: LiveInformationService | None = None,
+        tasks: TaskService | None = None,
+        agent: SupervisorAgent | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
@@ -69,6 +73,8 @@ class ConversationManager:
         self.settings = settings
         self.actions = actions
         self.live = live
+        self.tasks = tasks
+        self.agent = agent
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
@@ -114,8 +120,29 @@ class ConversationManager:
             if action_result.get("handled"):
                 result = action_result
             else:
+                task_result = (
+                    self.tasks.process(text)
+                    if self.tasks is not None
+                    else {"handled": False}
+                )
+                if task_result.get("handled"):
+                    result = task_result
+                    intent = Intent("task")
+                    live_result = {"handled": False}
+                else:
+                    agent_result = (
+                        self.agent.process(text)
+                        if self.agent is not None
+                        else {"handled": False}
+                    )
+                    if agent_result.get("handled"):
+                        result = agent_result
+                        intent = Intent("agent")
+                        live_result = {"handled": False}
+                    else:
+                        live_result = None
                 location = self.memory.recall("user.location")
-                live_result = (
+                live_result = live_result or (
                     self.live.process(
                         text,
                         default_location=(
@@ -127,7 +154,7 @@ class ConversationManager:
                 )
                 if live_result.get("handled"):
                     result = live_result
-                else:
+                elif result is None:
                     intent = classify(text, self.last_topic)
         if result is None:
             result = self._execute(intent, text, confirmed=confirmed)
@@ -197,6 +224,13 @@ class ConversationManager:
 
     def set_semantic_confirmation(self, enabled: bool) -> None:
         self._set_privacy("confirm_semantic_memory", enabled)
+
+    def set_personality(self, personality: str) -> None:
+        cleaned = personality.strip().lower()
+        if cleaned not in {"concise", "warm", "jarvis"}:
+            raise ValueError("Personality must be concise, warm, or jarvis.")
+        if self.settings is not None:
+            self.settings.set("assistant.personality", cleaned)
 
     def set_episode_retention(
         self,
@@ -526,12 +560,33 @@ class ConversationManager:
         return self.llm.generate(
             system_prompt=(
                 NOVA_SYSTEM_PROMPT
+                + self._personality_context()
                 + self._memory_context(text)
                 + context
                 + self._session_context(text)
             ),
             history=history,
             prompt=text,
+        )
+
+    def _personality_context(self) -> str:
+        personality = str(
+            self.settings.get("assistant.personality", "jarvis")
+            if self.settings is not None
+            else "jarvis"
+        )
+        instructions = {
+            "concise": "Be direct, compact, calm, and practical.",
+            "warm": "Be warm, encouraging, conversational, and thoughtful.",
+            "jarvis": (
+                "Sound composed, perceptive, capable, and subtly witty. "
+                "Address the user naturally, never roleplay abilities you do not "
+                "have, and never sacrifice clarity for theatrics."
+            ),
+        }
+        return "\n\nPersonality:\n" + instructions.get(
+            personality,
+            instructions["jarvis"],
         )
 
     def _record_episode(self, user_text: str, assistant_text: str) -> bool:

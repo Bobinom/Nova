@@ -29,6 +29,9 @@ class FakeConversation:
     def set_semantic_confirmation(self, enabled):
         self.confirm_semantic_memory = enabled
 
+    def set_personality(self, personality):
+        self.personality = personality
+
 
 class FakeStatus:
     def __init__(self, value):
@@ -47,6 +50,42 @@ class FakeMemory:
 
     def recall(self, key):
         return self.Record() if key == "user.location" else None
+
+
+class FakeTasks:
+    def __init__(self):
+        self.items = []
+
+    def list(self, **kwargs):
+        return list(self.items)
+
+    def create(self, title, **kwargs):
+        task = {
+            "id": len(self.items) + 1,
+            "title": title,
+            "status": "open",
+            "project": kwargs.get("project", "Inbox"),
+        }
+        self.items.append(task)
+        return task
+
+    def set_status(self, task_id, status):
+        task = next(item for item in self.items if item["id"] == task_id)
+        task["status"] = status
+        return task
+
+    def delete(self, task_id):
+        original = len(self.items)
+        self.items = [item for item in self.items if item["id"] != task_id]
+        return len(self.items) != original
+
+
+class FakeSettings:
+    def __init__(self):
+        self.values = {"assistant.personality": "jarvis"}
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
 
 
 class FakeLive(FakeStatus):
@@ -115,8 +154,11 @@ class FakeApp:
         self.stopped = False
         self.voice = FakeVoice()
         self.actions = FakeStatus({"enabled": True})
+        self.agent = FakeStatus({"available": True, "provider": "pydantic-ai"})
         self.live = FakeLive({"enabled": True})
         self.memory = FakeMemory()
+        self.tasks = FakeTasks()
+        self.settings = FakeSettings()
 
     def start(self):
         self.started = True
@@ -149,6 +191,24 @@ class GUIBridgeTests(unittest.TestCase):
         self.assertTrue(app.started)
         self.assertEqual(response["id"], "one")
         self.assertEqual(response["result"]["response"], "Reply to Hello Nova")
+
+    def test_bridge_manages_assistant_tasks(self):
+        bridge = NovaGUIBridge(FakeApp())
+        created = bridge.process({
+            "command": "task_create",
+            "title": "Design a bracket",
+            "project": "3D Studio",
+        })["result"]
+        self.assertEqual(created["title"], "Design a bracket")
+
+        tasks = bridge.process({"command": "tasks"})["result"]
+        self.assertEqual(len(tasks), 1)
+        completed = bridge.process({
+            "command": "task_status",
+            "task_id": created["id"],
+            "status": "completed",
+        })["result"]
+        self.assertEqual(completed["status"], "completed")
 
     def test_bridge_exposes_bounded_history(self):
         response = NovaGUIBridge(FakeApp()).process({
@@ -198,6 +258,7 @@ class GUIBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["voice"]["enabled"])
         self.assertTrue(result["actions"]["enabled"])
+        self.assertEqual(result["agent"]["provider"], "pydantic-ai")
         self.assertTrue(result["live_information"]["enabled"])
         self.assertEqual(result["ollama_model"], "llama3.2")
 

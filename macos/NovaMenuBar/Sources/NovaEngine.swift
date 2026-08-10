@@ -17,6 +17,13 @@ struct PendingAction {
     let target: String
 }
 
+struct AssistantTask: Identifiable {
+    let id: Int
+    let title: String
+    let status: String
+    let project: String
+}
+
 struct DashboardStatus {
     var version = ""
     var memories = 0
@@ -38,6 +45,8 @@ struct DashboardStatus {
     var wakeEnabled = false
     var wakePhrase = "Hey Nova"
     var followUpEnabled = true
+    var tasks: [AssistantTask] = []
+    var personality = "jarvis"
 }
 
 struct WeatherStatus {
@@ -78,6 +87,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var state: State = .starting
     @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var pendingAction: PendingAction?
+    @Published private(set) var actionProgressMessage = ""
     @Published private(set) var dashboard = DashboardStatus()
     @Published private(set) var weather = WeatherStatus()
     @Published private(set) var voiceSetupMessage = ""
@@ -157,6 +167,7 @@ final class NovaEngine: ObservableObject {
     func sendMessage(_ text: String) {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, state.isReady else { return }
+        preparePendingActionResponse(cleaned)
         if dashboard.wakeEnabled {
             pauseWakeListening()
             resumeWakeAfterResponse = true
@@ -177,6 +188,28 @@ final class NovaEngine: ObservableObject {
         guard state.isAvailable, !weather.isLoading else { return }
         weather.isLoading = true
         send(command: "weather")
+    }
+
+    func addTask(_ title: String) {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, state.isAvailable else { return }
+        send(command: "task_create", values: ["title": cleaned])
+    }
+
+    func completeTask(_ taskID: Int) {
+        guard state.isAvailable else { return }
+        send(
+            command: "task_status",
+            values: ["task_id": taskID, "status": "completed"]
+        )
+    }
+
+    func setPersonality(_ personality: String) {
+        dashboard.personality = personality
+        send(
+            command: "set_personality",
+            values: ["personality": personality]
+        )
     }
 
     func setPreference(_ key: String, enabled: Bool) {
@@ -263,8 +296,25 @@ final class NovaEngine: ObservableObject {
 
     private func respondToAction(_ response: String) {
         guard pendingAction != nil, state.isReady else { return }
+        preparePendingActionResponse(response)
         state = .thinking
         send(command: "message", values: ["text": response])
+    }
+
+    private func preparePendingActionResponse(_ response: String) {
+        guard let action = pendingAction else { return }
+        let normalized = response
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let confirmations = ["yes", "confirm", "do it", "go ahead"]
+        let cancellations = ["no", "cancel", "stop", "never mind", "nevermind"]
+        if confirmations.contains(normalized) {
+            pendingAction = nil
+            actionProgressMessage = "Working on it — \(action.description)…"
+        } else if cancellations.contains(normalized) {
+            pendingAction = nil
+            actionProgressMessage = "Cancelling action…"
+        }
     }
 
     private func bundledCoreURL() -> URL? {
@@ -310,6 +360,9 @@ final class NovaEngine: ObservableObject {
         let command = pendingCommands.removeValue(forKey: id) ?? ""
         guard response["ok"] as? Bool == true else {
             let error = response["error"] as? String ?? "Unknown bridge error"
+            if command == "message" || command == "wake_message" {
+                actionProgressMessage = ""
+            }
             if command == "dashboard" {
                 state = .unavailable(error)
             } else if command == "weather" {
@@ -330,7 +383,7 @@ final class NovaEngine: ObservableObject {
         if response["shutdown"] as? Bool == true { return }
 
         switch command {
-        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider":
+        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider", "set_personality":
             if let result = response["result"] as? [String: Any] {
                 updateDashboard(result)
             }
@@ -440,6 +493,8 @@ final class NovaEngine: ObservableObject {
             } else {
                 weather.isLoading = false
             }
+        case "task_create", "task_status", "task_delete":
+            send(command: "dashboard")
         default:
             state = .ready
         }
@@ -449,14 +504,20 @@ final class NovaEngine: ObservableObject {
         if let reply = result["response"] as? String {
             messages.append(ChatMessage(role: .nova, text: reply))
         }
+        if let intent = result["intent"] as? String,
+           intent.hasPrefix("task_") || intent.hasPrefix("agent_plan_") {
+            send(command: "dashboard")
+        }
         if result["action_status"] as? String == "pending_confirmation",
            let action = result["action"] as? [String: Any] {
+            actionProgressMessage = ""
             pendingAction = PendingAction(
                 description: action["description"] as? String ?? "Confirm action",
                 target: action["target"] as? String ?? "Nova action"
             )
         } else if result["action_status"] != nil {
             pendingAction = nil
+            actionProgressMessage = ""
         }
     }
 
@@ -466,6 +527,7 @@ final class NovaEngine: ObservableObject {
         let actions = result["actions"] as? [String: Any] ?? [:]
         let live = result["live_information"] as? [String: Any] ?? [:]
         let privacy = result["privacy"] as? [String: Any] ?? [:]
+        let taskValues = result["tasks"] as? [[String: Any]] ?? []
         dashboard = DashboardStatus(
             version: status["version"] as? String ?? "",
             memories: status["memories"] as? Int ?? 0,
@@ -493,7 +555,18 @@ final class NovaEngine: ObservableObject {
                 ?? "GmM3ucvssIf0NWKHkiyc",
             wakeEnabled: voice["wake_enabled"] as? Bool ?? false,
             wakePhrase: voice["wake_phrase"] as? String ?? "Hey Nova",
-            followUpEnabled: voice["follow_up_enabled"] as? Bool ?? true
+            followUpEnabled: voice["follow_up_enabled"] as? Bool ?? true,
+            tasks: taskValues.compactMap { task in
+                guard let id = task["id"] as? Int,
+                      let title = task["title"] as? String else { return nil }
+                return AssistantTask(
+                    id: id,
+                    title: title,
+                    status: task["status"] as? String ?? "open",
+                    project: task["project"] as? String ?? "Inbox"
+                )
+            },
+            personality: result["personality"] as? String ?? "jarvis"
         )
     }
 
@@ -516,6 +589,7 @@ final class NovaEngine: ObservableObject {
                 return
             }
             messages.append(ChatMessage(role: .user, text: request))
+            preparePendingActionResponse(request)
             wakeStatusMessage = event["follow_up"] as? Bool == true
                 ? "Follow-up: \(request)"
                 : "Heard: \(request)"
