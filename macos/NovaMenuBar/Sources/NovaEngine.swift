@@ -505,7 +505,7 @@ final class NovaEngine: ObservableObject {
             messages.append(ChatMessage(role: .nova, text: reply))
         }
         if let intent = result["intent"] as? String,
-           intent.hasPrefix("task_") {
+           intent.hasPrefix("task_") || intent.hasPrefix("agent_plan_") {
             send(command: "dashboard")
         }
         if result["action_status"] as? String == "pending_confirmation",

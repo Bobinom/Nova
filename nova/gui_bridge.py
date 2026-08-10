@@ -347,6 +347,7 @@ class NovaGUIBridge:
             "privacy": self.app.conversation.privacy_status(),
             "live_information": self.app.live.status(),
             "ollama_model": "llama3.2",
+            "agent": self.app.agent.status(),
             "tasks": self.app.tasks.list(limit=5),
             "personality": self.app.settings.get(
                 "assistant.personality",

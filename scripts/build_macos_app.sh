@@ -44,6 +44,8 @@ cp "$REPO_DIR/macos/NovaMenuBar/Resources/nova-orb-transparent.png" \
     --workpath "$BUILD_DIR/work" \
     --specpath "$BUILD_DIR/spec" \
     --paths "$REPO_DIR" \
+    --copy-metadata genai-prices \
+    --copy-metadata pydantic-ai-slim \
     --add-data \
     "$REPO_DIR/nova/voice/macos/NovaSpeechInput.m:nova/voice/macos" \
     "$REPO_DIR/nova/gui_bridge.py"

@@ -2,6 +2,23 @@
 
 All notable Nova releases are documented here.
 
+## Unreleased
+
+### Added
+
+- A bounded Pydantic AI supervisor that turns explicit `Agent: <goal>` requests
+  into validated local plans and persists the steps in Nova's Tasks workspace.
+- A dedicated `qwen2.5:1.5b` Ollama planning model, selected after local
+  benchmarking against the larger conversation model.
+- Agent availability and provider details in the native dashboard bridge.
+
+### Privacy and safety
+
+- Agent planning remains local through Ollama and has no unrestricted shell,
+  file, messaging, purchasing, printing, or computer-control tools.
+- Existing deterministic memory, tasks, live information, and confirmed action
+  routes retain priority over the agent.
+
 ## 8.0.0 - 2026-08-09
 
 ### Added

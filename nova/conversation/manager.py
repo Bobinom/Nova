@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from nova.actions.service import ActionService
+from nova.agent.service import SupervisorAgent
 from nova.conversation.intent import Intent, classify
 from nova.conversation.models import ConversationEpisode, ConversationSession
 from nova.conversation.repository import ConversationRepository
@@ -62,6 +63,7 @@ class ConversationManager:
         actions: ActionService | None = None,
         live: LiveInformationService | None = None,
         tasks: TaskService | None = None,
+        agent: SupervisorAgent | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
@@ -72,6 +74,7 @@ class ConversationManager:
         self.actions = actions
         self.live = live
         self.tasks = tasks
+        self.agent = agent
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
@@ -127,7 +130,17 @@ class ConversationManager:
                     intent = Intent("task")
                     live_result = {"handled": False}
                 else:
-                    live_result = None
+                    agent_result = (
+                        self.agent.process(text)
+                        if self.agent is not None
+                        else {"handled": False}
+                    )
+                    if agent_result.get("handled"):
+                        result = agent_result
+                        intent = Intent("agent")
+                        live_result = {"handled": False}
+                    else:
+                        live_result = None
                 location = self.memory.recall("user.location")
                 live_result = live_result or (
                     self.live.process(

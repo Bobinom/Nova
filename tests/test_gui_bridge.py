@@ -154,6 +154,7 @@ class FakeApp:
         self.stopped = False
         self.voice = FakeVoice()
         self.actions = FakeStatus({"enabled": True})
+        self.agent = FakeStatus({"available": True, "provider": "pydantic-ai"})
         self.live = FakeLive({"enabled": True})
         self.memory = FakeMemory()
         self.tasks = FakeTasks()
@@ -257,6 +258,7 @@ class GUIBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["voice"]["enabled"])
         self.assertTrue(result["actions"]["enabled"])
+        self.assertEqual(result["agent"]["provider"], "pydantic-ai")
         self.assertTrue(result["live_information"]["enabled"])
         self.assertEqual(result["ollama_model"], "llama3.2")
 

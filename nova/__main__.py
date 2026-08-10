@@ -177,6 +177,7 @@ def main() -> None:
     print("  task-complete <id>")
     print("  task-cancel <id>")
     print("  task-delete <id>")
+    print("  agent <goal>")
     print("  forget <memory-key>")
     print("  quit")
 
