@@ -56,6 +56,31 @@ class SupervisorAgentTests(unittest.TestCase):
             tasks = TaskService(database).list()
             self.assertEqual(tasks[0]["project"], "Agent: Prepare for tomorrow")
 
+    def test_model_numbering_is_removed_before_tasks_are_saved_or_spoken(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            plan = AgentPlan(
+                objective="Prepare tomorrow",
+                summary="A short plan.",
+                steps=[
+                    PlanStep(title="1. Review the schedule"),
+                    PlanStep(title="Step 2: Pack required items"),
+                ],
+            )
+            app.agent.planner = RecordingPlanner(plan)
+
+            result = app.handle_message("Prepare me for tomorrow")
+
+            self.assertIn("1. Review the schedule", result["response"])
+            self.assertNotIn("1. 1.", result["response"])
+            self.assertNotIn("2. Step 2", result["response"])
+            self.assertEqual(
+                [task["title"] for task in app.tasks.list()],
+                ["Review the schedule", "Pack required items"],
+            )
+            app.stop()
+
     def test_agent_does_not_intercept_normal_conversation(self):
         with tempfile.TemporaryDirectory() as directory:
             tasks = TaskService(Path(directory) / "nova.db")
