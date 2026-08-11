@@ -39,6 +39,11 @@ class ConversationManager:
         "ollama returned an empty response",
         "ollama returned an invalid response",
         "ollama took too long to respond",
+        "openai is not connected",
+        "openai request failed:",
+        "openai returned an empty response",
+        "openai returned an invalid response",
+        "openai took too long to respond",
     )
 
     _TRIVIAL_EPISODE_TEXT = {

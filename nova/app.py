@@ -19,6 +19,8 @@ from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
 from nova.core.state import StateStore
 from nova.llm.ollama import OllamaService
+from nova.llm.openai import OpenAIKeychain, OpenAIService
+from nova.llm.router import BrainRouter
 from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
@@ -88,9 +90,9 @@ class NovaApplication:
             logger=self.logger.getChild("memory"),
         )
 
-        self.llm = OllamaService(
-            model="llama3.2",
-        )
+        self.local_llm = OllamaService(model="llama3.2")
+        self.cloud_llm = OpenAIService(OpenAIKeychain())
+        self.llm = BrainRouter(self.settings, self.local_llm, self.cloud_llm)
 
         self.conversation = ConversationManager(
             repository=ConversationRepository(self.paths.database_file),

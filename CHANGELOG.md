@@ -2,6 +2,23 @@
 
 All notable Nova releases are documented here.
 
+## 8.2.0 - 2026-08-12
+
+### Added
+
+- Local, Hybrid, and Cloud brain modes in native Settings.
+- OpenAI Responses API support using `gpt-5.4-mini` for cloud conversation.
+- Secure OpenAI API-key storage in macOS Keychain.
+- Automatic Ollama fallback when Hybrid mode cannot reach OpenAI.
+- Provider and model status in the native dashboard bridge.
+
+### Privacy and safety
+
+- Nova's SQLite memories, task state, actions, and confirmations remain local.
+- Only the compact conversation context selected by Nova is sent to OpenAI.
+- Cloud responses cannot bypass deterministic action routes or confirmations.
+- Responses API requests disable server-side response storage.
+
 ## 8.1.0 - 2026-08-10
 
 ### Added

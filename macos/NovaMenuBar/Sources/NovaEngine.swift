@@ -50,6 +50,11 @@ struct DashboardStatus {
     var agentObjective = ""
     var agentProgress = ""
     var agentCurrentStep = ""
+    var brainMode = "hybrid"
+    var cloudConfigured = false
+    var cloudModel = "gpt-5.4-mini"
+    var effectiveProvider = "ollama"
+    var lastProvider = "local"
     var personality = "jarvis"
 }
 
@@ -214,6 +219,16 @@ final class NovaEngine: ObservableObject {
             command: "set_personality",
             values: ["personality": personality]
         )
+    }
+
+    func configureOpenAI(apiKey: String) {
+        guard state.isReady else { return }
+        send(command: "configure_openai", values: ["api_key": apiKey])
+    }
+
+    func setBrainMode(_ mode: String) {
+        dashboard.brainMode = mode
+        send(command: "set_brain_mode", values: ["mode": mode])
     }
 
     func setPreference(_ key: String, enabled: Bool) {
@@ -387,7 +402,7 @@ final class NovaEngine: ObservableObject {
         if response["shutdown"] as? Bool == true { return }
 
         switch command {
-        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider", "set_personality":
+        case "dashboard", "set_preference", "configure_elevenlabs", "set_voice_provider", "set_personality", "configure_openai", "set_brain_mode":
             if let result = response["result"] as? [String: Any] {
                 updateDashboard(result)
             }
@@ -532,6 +547,7 @@ final class NovaEngine: ObservableObject {
         let live = result["live_information"] as? [String: Any] ?? [:]
         let privacy = result["privacy"] as? [String: Any] ?? [:]
         let agent = result["agent"] as? [String: Any] ?? [:]
+        let brain = result["brain"] as? [String: Any] ?? [:]
         let taskValues = result["tasks"] as? [[String: Any]] ?? []
         dashboard = DashboardStatus(
             version: status["version"] as? String ?? "",
@@ -575,6 +591,11 @@ final class NovaEngine: ObservableObject {
             agentObjective: agent["objective"] as? String ?? "",
             agentProgress: agent["progress"] as? String ?? "",
             agentCurrentStep: agent["current_step"] as? String ?? "",
+            brainMode: brain["mode"] as? String ?? "hybrid",
+            cloudConfigured: brain["cloud_configured"] as? Bool ?? false,
+            cloudModel: brain["cloud_model"] as? String ?? "gpt-5.4-mini",
+            effectiveProvider: brain["effective_provider"] as? String ?? "ollama",
+            lastProvider: brain["last_provider"] as? String ?? "local",
             personality: result["personality"] as? String ?? "jarvis"
         )
     }

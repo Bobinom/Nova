@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = {
         ],
     },
     "assistant": {"personality": "jarvis"},
+    "brain": {"mode": "hybrid", "cloud_model": "gpt-5.4-mini"},
     "plugins": {"enabled": True}
 }
 

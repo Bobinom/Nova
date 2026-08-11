@@ -97,6 +97,25 @@ class FakeLive(FakeStatus):
         }
 
 
+class FakeBrain(FakeStatus):
+    def __init__(self):
+        super().__init__({
+            "mode": "hybrid",
+            "cloud_configured": False,
+            "cloud_model": "gpt-5.4-mini",
+            "effective_provider": "ollama",
+            "last_provider": "local",
+        })
+
+    def configure(self, api_key):
+        self.value["cloud_configured"] = bool(api_key)
+        self.value["mode"] = "hybrid"
+        self.value["effective_provider"] = "openai"
+
+    def set_mode(self, mode):
+        self.value["mode"] = mode
+
+
 class FakeVoice(FakeStatus):
     def __init__(self):
         super().__init__({
@@ -159,6 +178,7 @@ class FakeApp:
         self.memory = FakeMemory()
         self.tasks = FakeTasks()
         self.settings = FakeSettings()
+        self.llm = FakeBrain()
 
     def start(self):
         self.started = True
@@ -261,6 +281,18 @@ class GUIBridgeTests(unittest.TestCase):
         self.assertEqual(result["agent"]["provider"], "pydantic-ai")
         self.assertTrue(result["live_information"]["enabled"])
         self.assertEqual(result["ollama_model"], "llama3.2")
+        self.assertEqual(result["brain"]["mode"], "hybrid")
+
+    def test_bridge_configures_openai_without_returning_api_key(self):
+        bridge = NovaGUIBridge(FakeApp())
+
+        result = bridge.process({
+            "command": "configure_openai",
+            "api_key": "secret-api-key",
+        })["result"]
+
+        self.assertTrue(result["brain"]["cloud_configured"])
+        self.assertNotIn("secret-api-key", str(result))
 
     def test_bridge_updates_only_allowlisted_preferences(self):
         app = FakeApp()

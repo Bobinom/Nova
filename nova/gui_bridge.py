@@ -135,6 +135,12 @@ class NovaGUIBridge:
                 str(request.get("personality", ""))
             )
             response["result"] = self._dashboard()
+        elif command == "configure_openai":
+            self.app.llm.configure(str(request.get("api_key", "")))
+            response["result"] = self._dashboard()
+        elif command == "set_brain_mode":
+            self.app.llm.set_mode(str(request.get("mode", "")))
+            response["result"] = self._dashboard()
         elif command == "dashboard":
             response["result"] = self._dashboard()
         elif command == "set_preference":
@@ -347,6 +353,7 @@ class NovaGUIBridge:
             "privacy": self.app.conversation.privacy_status(),
             "live_information": self.app.live.status(),
             "ollama_model": "llama3.2",
+            "brain": self.app.llm.status(),
             "agent": self.app.agent.status(),
             "tasks": self.app.tasks.list(limit=5),
             "personality": self.app.settings.get(

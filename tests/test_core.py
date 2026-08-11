@@ -9,7 +9,7 @@ from nova.core.state import StateStore
 
 class CoreTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "8.1.0")
+        self.assertEqual(__version__, "8.2.0")
 
     def test_status_uses_release_version(self):
         status = NovaStatus(
@@ -21,7 +21,7 @@ class CoreTests(unittest.TestCase):
             conversation_episodes=2,
         ).as_dict()
 
-        self.assertEqual(status["version"], "8.1.0")
+        self.assertEqual(status["version"], "8.2.0")
         self.assertEqual(status["conversation_episodes"], 2)
         self.assertEqual(status["open_tasks"], 0)
 

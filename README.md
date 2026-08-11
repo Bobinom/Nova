@@ -243,6 +243,22 @@ purchase anything, or bypass Nova's existing computer-action confirmations.
 Ordinary conversation and deterministic task, memory, live-information, and
 action routes continue to run before the agent path.
 
+### Local, Hybrid, and Cloud brains
+
+Nova's Settings screen provides three processing modes:
+
+- **Local** uses Ollama only.
+- **Hybrid** uses OpenAI for conversation and automatically falls back to
+  Ollama when the key, network, or cloud service is unavailable.
+- **Cloud** requires OpenAI and reports cloud failures instead of silently
+  changing providers.
+
+Connect an OpenAI API key in **Settings → Nova brain**. The credential is saved
+in macOS Keychain and is never written to Nova's settings or SQLite database.
+The default cloud model is `gpt-5.4-mini` through the Responses API. Task,
+memory, live-information, and confirmed-action routing remains deterministic
+and local; only conversational requests reach the selected language model.
+
 The glass **Suggested** card can request current local weather from Open-Meteo. Nova uses
 the exact `user.location` fact you previously saved, and sends it only when you
 click **Refresh local weather** or explicitly ask a weather question. Live web

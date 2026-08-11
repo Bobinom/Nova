@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showingOnboarding = false
     @State private var elevenLabsAPIKey = ""
     @State private var elevenLabsVoiceID = "GmM3ucvssIf0NWKHkiyc"
+    @State private var openAIAPIKey = ""
     @State private var mode: InterfaceMode = .voice
     @State private var input = ""
     @State private var newTaskTitle = ""
@@ -459,6 +460,61 @@ struct ContentView: View {
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                }
+
+                SettingsGroup(title: "Nova brain", icon: "brain.head.profile") {
+                    Picker(
+                        "Processing mode",
+                        selection: Binding(
+                            get: { engine.dashboard.brainMode },
+                            set: { engine.setBrainMode($0) }
+                        )
+                    ) {
+                        Text("Local").tag("local")
+                        Text("Hybrid").tag("hybrid")
+                        Text("Cloud").tag("cloud")
+                    }
+                    .pickerStyle(.segmented)
+                    Text(
+                        engine.dashboard.brainMode == "local"
+                            ? "Private and offline through Ollama."
+                            : "OpenAI handles conversation; Nova keeps actions, permissions, and memory storage on this Mac."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("OpenAI cloud brain")
+                            Text(
+                                engine.dashboard.cloudConfigured
+                                    ? "API key stored securely in macOS Keychain."
+                                    : "Connect an API key to enable Hybrid and Cloud modes."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Circle()
+                            .fill(engine.dashboard.cloudConfigured ? .green : .orange)
+                            .frame(width: 8, height: 8)
+                    }
+                    SecureField(
+                        engine.dashboard.cloudConfigured
+                            ? "New API key (leave blank to keep current key)"
+                            : "OpenAI API key",
+                        text: $openAIAPIKey
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    Button("Connect OpenAI") {
+                        engine.configureOpenAI(apiKey: openAIAPIKey)
+                        openAIAPIKey = ""
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(novaPurple)
+                    .disabled(openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Text("Active: \(engine.dashboard.effectiveProvider.capitalized) • \(engine.dashboard.cloudModel)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(novaCyan)
                 }
 
                 SettingsGroup(title: "Privacy & memory", icon: "lock.shield") {
