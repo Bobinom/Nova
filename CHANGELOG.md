@@ -4,6 +4,14 @@ All notable Nova releases are documented here.
 
 ## 8.2.0 - 2026-08-12
 
+### Interface redesign
+
+- A new red command-center dashboard with a technical grid, framed task and
+  calendar panels, compact circular navigation, and a prominent animated core.
+- State-aware core lighting for ready, listening, thinking, and speaking.
+- The existing chat, voice, tasks, calendar, settings, and action-confirmation
+  controls remain available inside the redesigned interface.
+
 ### Added
 
 - Local, Hybrid, and Cloud brain modes in native Settings.

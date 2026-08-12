@@ -154,6 +154,11 @@ grant Nova Calendar access. No Google password or OAuth secret is stored by Nova
 
 ### Nova 7.7 interface
 
+The current command-center theme uses a near-black technical grid, restrained
+white instrumentation, red status lighting, and an animated red/white energy
+core. Tasks and calendar information flank the core while chat, voice, calendar,
+and settings remain accessible from the circular lower command dock.
+
 Nova 7.7 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
