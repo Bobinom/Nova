@@ -13,6 +13,8 @@ All notable Nova releases are documented here.
   command-center artwork, preserving every GIF frame inside the macOS app.
 - Transparent core frames and stricter center bounds prevent the animation from
   covering the header or displaying a mismatched square background.
+- Replaced the previous core and its extra decorative circle with a transparent
+  red particle-ring animation supplied by the user.
 - The existing chat, voice, tasks, calendar, settings, and action-confirmation
   controls remain available inside the redesigned interface.
 

@@ -1289,11 +1289,6 @@ private struct RedEnergyCore: View {
             let active = state == .listening || state == .thinking || state == .speaking
             let pulse = 1 + sin(phase * (active ? 3.5 : 1.35)) * (active ? 0.035 : 0.018)
             ZStack {
-                Circle()
-                    .fill(novaRed.opacity(active ? 0.17 : 0.08))
-                    .frame(width: 330, height: 330)
-                    .blur(radius: 72)
-                    .scaleEffect(pulse)
                 coreImage
                     .scaleEffect(pulse)
                     .rotation3DEffect(
@@ -1303,11 +1298,6 @@ private struct RedEnergyCore: View {
                     )
                     .brightness(active ? 0.08 : 0)
                     .shadow(color: novaRed.opacity(active ? 0.8 : 0.35), radius: active ? 26 : 12)
-                Circle()
-                    .trim(from: 0.04, to: 0.21)
-                    .stroke(novaRed.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
-                    .frame(width: 360, height: 360)
-                    .rotationEffect(.degrees(phase * (active ? 22 : 8)))
             }
         }
         .frame(width: 420, height: 350)
@@ -1317,11 +1307,11 @@ private struct RedEnergyCore: View {
     @ViewBuilder
     private var coreImage: some View {
         if let directory = Bundle.main.resourceURL?.appendingPathComponent(
-            "nova-orange-frames",
+            "nova-red-particle-frames",
             isDirectory: true
         ) {
-            AnimatedFrameView(directory: directory)
-                .frame(width: 390, height: 315)
+            AnimatedFrameView(directory: directory, frameCount: 68, framesPerSecond: 50.0 / 3.0)
+                .frame(width: 350, height: 350)
         } else {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }
@@ -1330,12 +1320,16 @@ private struct RedEnergyCore: View {
 
 private struct AnimatedFrameView: View {
     let directory: URL
+    let frameCount: Int
+    let framesPerSecond: Double
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.2)) { context in
-            let frame = Int(context.date.timeIntervalSinceReferenceDate * 5) % 20 + 1
+        TimelineView(.periodic(from: .now, by: 1.0 / framesPerSecond)) { context in
+            let frame = Int(
+                context.date.timeIntervalSinceReferenceDate * framesPerSecond
+            ) % frameCount + 1
             let url = directory.appendingPathComponent(
-                String(format: "core-%02d.png", frame)
+                String(format: "core-%03d.png", frame)
             )
             if let image = NSImage(contentsOf: url) {
                 Image(nsImage: image)
