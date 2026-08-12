@@ -2,6 +2,17 @@
 
 All notable Nova releases are documented here.
 
+## Unreleased
+
+### Reusable skills
+
+- Added safe manifest-based skill discovery with built-in research and project
+  planning workflows plus support for personal JSON skill manifests.
+- Added deterministic chat, voice, and CLI skill commands and persistent SQLite
+  run history with completion status, ratings, and feedback.
+- Skills v1 is guidance-only: executable permissions are rejected, skills cannot
+  silently modify themselves, and existing action confirmations remain intact.
+
 ## 8.2.0 - 2026-08-12
 
 ### Interface redesign

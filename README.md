@@ -50,6 +50,7 @@ episodic memory.
 - Live local CPU, memory, database, service, and macOS thermal-state dashboard
 - Clickable Confirm and Cancel controls for pending computer actions
 - Persistent local SQLite storage
+- Declarative reusable skills with safe manifests and persistent outcome feedback
 
 ## Requirements
 
@@ -229,6 +230,20 @@ remaining honest about unverified work and preserving all action confirmations.
 
 Terminal commands include `tasks`, `task-add <title>`, `task-start <id>`,
 `task-complete <id>`, `task-cancel <id>`, and `task-delete <id>`.
+
+### Reusable skills
+
+Nova Skills v1 provides reusable, declarative workflows without allowing skill
+files to execute arbitrary code. Say or type `skills`, `skill research`, or
+`use skill research for compare two laptops`. Built-in skills cover research
+and project planning. Personal skills can be installed as
+`~/.nova4/skills/<skill-id>/manifest.json`; Nova validates every manifest and
+currently accepts only the `none` permission.
+
+Each use creates a persistent SQLite skill run. Record an outcome with
+`complete skill run <id> rating <1-5> feedback <text>` or inspect history with
+`skill-runs`. Feedback is stored for a later approval-based improvement system;
+Skills v1 never silently rewrites a skill or bypasses action confirmation.
 
 ### Local supervisor agent
 

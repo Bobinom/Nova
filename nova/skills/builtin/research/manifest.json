@@ -1,0 +1,14 @@
+{
+  "id": "research",
+  "name": "Research",
+  "version": "1.0.0",
+  "description": "Plan a careful, source-aware research workflow.",
+  "triggers": ["research", "compare", "investigate"],
+  "instructions": [
+    "Define the question, constraints, and desired decision.",
+    "Gather current primary sources and record where each claim came from.",
+    "Compare evidence, uncertainty, cost, and important tradeoffs.",
+    "Deliver a concise recommendation with sources and unresolved questions."
+  ],
+  "permissions": ["none"]
+}

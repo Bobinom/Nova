@@ -25,6 +25,7 @@ from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
 from nova.plugins.manager import PluginManager
+from nova.skills.service import SkillService
 from nova.tasks.service import TaskService
 from nova.voice.service import VoiceService
 
@@ -73,6 +74,7 @@ class NovaApplication:
         self.tasks = TaskService(self.paths.database_file)
         self.agent_runs = AgentRunRepository(self.paths.database_file)
         self.agent = SupervisorAgent(self.tasks, runs=self.agent_runs)
+        self.skills = SkillService(self.paths.database_file, self.paths.skills_dir)
 
         self.events = EventBus(
             logger=self.logger,
@@ -105,6 +107,7 @@ class NovaApplication:
             live=self.live,
             tasks=self.tasks,
             agent=self.agent,
+            skills=self.skills,
         )
 
         self._running = False
@@ -120,6 +123,7 @@ class NovaApplication:
         self.state.initialize()
         self.memory.initialize()
         self.conversation.initialize()
+        self.skills.discover()
         self.plugins.discover()
         self.plugins.start_all()
 

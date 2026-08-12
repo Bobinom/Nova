@@ -1,0 +1,14 @@
+{
+  "id": "project-planning",
+  "name": "Project Planning",
+  "version": "1.0.0",
+  "description": "Turn a goal into bounded milestones and verification steps.",
+  "triggers": ["plan", "project", "milestone"],
+  "instructions": [
+    "Clarify the outcome, constraints, deadline, and definition of done.",
+    "Split the work into ordered milestones with observable results.",
+    "Identify dependencies, risks, and actions requiring confirmation.",
+    "Define a verification step for every milestone."
+  ],
+  "permissions": ["none"]
+}

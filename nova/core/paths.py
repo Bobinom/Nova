@@ -6,6 +6,7 @@ class NovaPaths:
     data_dir: Path
     logs_dir: Path
     plugins_dir: Path
+    skills_dir: Path
     settings_file: Path
     database_file: Path
 
@@ -14,7 +15,8 @@ class NovaPaths:
         data_dir = (base_dir or Path.home() / ".nova4").expanduser().resolve()
         logs_dir = data_dir / "logs"
         plugins_dir = data_dir / "plugins"
-        for directory in (data_dir, logs_dir, plugins_dir):
+        skills_dir = data_dir / "skills"
+        for directory in (data_dir, logs_dir, plugins_dir, skills_dir):
             directory.mkdir(parents=True, exist_ok=True)
-        return cls(data_dir, logs_dir, plugins_dir,
+        return cls(data_dir, logs_dir, plugins_dir, skills_dir,
                    data_dir / "settings.json", data_dir / "nova.db")

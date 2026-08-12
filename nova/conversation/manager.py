@@ -16,6 +16,7 @@ from nova.llm.service import LLMService
 from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.tasks.service import TaskService
+from nova.skills.service import SkillService
 
 
 class ConversationManager:
@@ -69,6 +70,7 @@ class ConversationManager:
         live: LiveInformationService | None = None,
         tasks: TaskService | None = None,
         agent: SupervisorAgent | None = None,
+        skills: SkillService | None = None,
     ) -> None:
         self.repository = repository
         self.memory = memory
@@ -80,6 +82,7 @@ class ConversationManager:
         self.live = live
         self.tasks = tasks
         self.agent = agent
+        self.skills = skills
         self.last_topic: str | None = None
         self._privacy_overrides: dict[str, Any] = {}
         self._pending_memory: Intent | None = None
@@ -135,17 +138,27 @@ class ConversationManager:
                     intent = Intent("task")
                     live_result = {"handled": False}
                 else:
-                    agent_result = (
-                        self.agent.process(text)
-                        if self.agent is not None
+                    skill_result = (
+                        self.skills.process(text)
+                        if self.skills is not None
                         else {"handled": False}
                     )
-                    if agent_result.get("handled"):
-                        result = agent_result
-                        intent = Intent("agent")
+                    if skill_result.get("handled"):
+                        result = skill_result
+                        intent = Intent("skill")
                         live_result = {"handled": False}
                     else:
-                        live_result = None
+                        agent_result = (
+                            self.agent.process(text)
+                            if self.agent is not None
+                            else {"handled": False}
+                        )
+                        if agent_result.get("handled"):
+                            result = agent_result
+                            intent = Intent("agent")
+                            live_result = {"handled": False}
+                        else:
+                            live_result = None
                 location = self.memory.recall("user.location")
                 live_result = live_result or (
                     self.live.process(

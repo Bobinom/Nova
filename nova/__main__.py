@@ -180,6 +180,11 @@ def main() -> None:
     print("  agent <goal>")
     print("  start | pause | resume | cancel my plan")
     print("  complete current step | agent status")
+    print("  skills")
+    print("  skill <skill-id>")
+    print("  use skill <skill-id> for <request>")
+    print("  skill-runs")
+    print("  complete skill run <id> [rating 1-5] [feedback <text>]")
     print("  forget <memory-key>")
     print("  quit")
 
@@ -413,6 +418,18 @@ def main() -> None:
                 else:
                     deleted = app.tasks.delete(int(task_id))
                     print("Task deleted." if deleted else "Task not found.")
+                continue
+
+            if raw == "skill-runs":
+                runs = app.skills.runs.list()
+                if not runs:
+                    print("No skill runs recorded.")
+                else:
+                    for run in runs:
+                        print(
+                            f"[{run['id']}] {run['status']}: {run['skill_id']} "
+                            f"{run['skill_version']} — {run['request']}"
+                        )
                 continue
 
             if raw in {"memory", "memories"}:

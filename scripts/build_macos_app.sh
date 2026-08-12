@@ -56,6 +56,8 @@ cp -R "$REPO_DIR/macos/NovaMenuBar/Resources/nova-red-particle-frames" \
     --copy-metadata pydantic-ai-slim \
     --add-data \
     "$REPO_DIR/nova/voice/macos/NovaSpeechInput.m:nova/voice/macos" \
+    --add-data \
+    "$REPO_DIR/nova/skills/builtin:nova/skills/builtin" \
     "$REPO_DIR/nova/gui_bridge.py"
 cp -R "$CORE_DIR" "$RESOURCES_DIR/NovaCore"
 
