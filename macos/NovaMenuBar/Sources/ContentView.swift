@@ -28,6 +28,11 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             atmosphericBackground
+            if !showingSettings, mode == .voice {
+                RedEnergyCore(state: engine.state)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+            }
             VStack(spacing: 12) {
                 commandHeader
                 Group {
@@ -193,7 +198,9 @@ struct ContentView: View {
 
     private var coreCommandCenter: some View {
         VStack(spacing: 4) {
-            RedEnergyCore(state: engine.state)
+            Color.clear
+                .frame(width: 420, height: 350)
+                .contentShape(Circle())
                 .onTapGesture { if engine.state.isReady { engine.listen() } }
             HStack(spacing: 8) {
                 Circle().fill(statusColor).frame(width: 7, height: 7)
@@ -1283,12 +1290,13 @@ private struct RedEnergyCore: View {
     let state: NovaEngine.State
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
-            let phase = timeline.date.timeIntervalSinceReferenceDate
-            let active = state == .listening || state == .thinking || state == .speaking
-            let pulse = 1 + sin(phase * (active ? 3.5 : 1.35)) * (active ? 0.035 : 0.018)
-            ZStack {
+        GeometryReader { geometry in
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
+                let phase = timeline.date.timeIntervalSinceReferenceDate
+                let active = state == .listening || state == .thinking || state == .speaking
+                let pulse = 1 + sin(phase * (active ? 3.5 : 1.35)) * (active ? 0.035 : 0.018)
                 coreImage
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .scaleEffect(pulse)
                     .rotation3DEffect(
                         .degrees(sin(phase * 0.34) * 2.2),
@@ -1299,8 +1307,6 @@ private struct RedEnergyCore: View {
                     .shadow(color: novaRed.opacity(active ? 0.8 : 0.35), radius: active ? 26 : 12)
             }
         }
-        .frame(width: 560, height: 430)
-        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -1310,7 +1316,7 @@ private struct RedEnergyCore: View {
             isDirectory: true
         ) {
             AnimatedFrameView(directory: directory, frameCount: 68, framesPerSecond: 50.0 / 3.0)
-                .frame(width: 560, height: 420)
+                .scaledToFit()
         } else {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }
