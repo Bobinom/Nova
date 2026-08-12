@@ -205,7 +205,6 @@ struct ContentView: View {
                 .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .clipped()
     }
 
     private var commandDock: some View {
@@ -1300,7 +1299,7 @@ private struct RedEnergyCore: View {
                     .shadow(color: novaRed.opacity(active ? 0.8 : 0.35), radius: active ? 26 : 12)
             }
         }
-        .frame(width: 420, height: 350)
+        .frame(width: 560, height: 430)
         .contentShape(Rectangle())
     }
 
@@ -1311,7 +1310,7 @@ private struct RedEnergyCore: View {
             isDirectory: true
         ) {
             AnimatedFrameView(directory: directory, frameCount: 68, framesPerSecond: 50.0 / 3.0)
-                .frame(width: 350, height: 350)
+                .frame(width: 560, height: 420)
         } else {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }

@@ -15,6 +15,8 @@ All notable Nova releases are documented here.
   covering the header or displaying a mismatched square background.
 - Replaced the previous core and its extra decorative circle with a transparent
   red particle-ring animation supplied by the user.
+- Restored the particle animation's full widescreen canvas and removed center
+  clipping so its outer particles remain visible throughout the loop.
 - The existing chat, voice, tasks, calendar, settings, and action-confirmation
   controls remain available inside the redesigned interface.
 
