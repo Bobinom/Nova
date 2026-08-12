@@ -193,7 +193,6 @@ struct ContentView: View {
 
     private var coreCommandCenter: some View {
         VStack(spacing: 4) {
-            Spacer(minLength: 0)
             RedEnergyCore(state: engine.state)
                 .onTapGesture { if engine.state.isReady { engine.listen() } }
             HStack(spacing: 8) {
@@ -204,8 +203,9 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
             floatingComposer
                 .padding(.top, 8)
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .clipped()
     }
 
     private var commandDock: some View {
@@ -1310,38 +1310,40 @@ private struct RedEnergyCore: View {
                     .rotationEffect(.degrees(phase * (active ? 22 : 8)))
             }
         }
-        .frame(width: 470, height: 430)
+        .frame(width: 420, height: 350)
         .contentShape(Rectangle())
     }
 
     @ViewBuilder
     private var coreImage: some View {
-        if let url = Bundle.main.url(forResource: "nova-orange-core", withExtension: "gif") {
-            AnimatedGIFView(url: url)
-                .frame(width: 450, height: 410)
+        if let directory = Bundle.main.resourceURL?.appendingPathComponent(
+            "nova-orange-frames",
+            isDirectory: true
+        ) {
+            AnimatedFrameView(directory: directory)
+                .frame(width: 390, height: 315)
         } else {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }
     }
 }
 
-private struct AnimatedGIFView: NSViewRepresentable {
-    let url: URL
+private struct AnimatedFrameView: View {
+    let directory: URL
 
-    func makeNSView(context: Context) -> NSImageView {
-        let view = NSImageView()
-        view.imageScaling = .scaleProportionallyUpOrDown
-        view.imageAlignment = .alignCenter
-        view.animates = true
-        view.image = NSImage(contentsOf: url)
-        return view
-    }
-
-    func updateNSView(_ view: NSImageView, context: Context) {
-        if view.image == nil {
-            view.image = NSImage(contentsOf: url)
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.2)) { context in
+            let frame = Int(context.date.timeIntervalSinceReferenceDate * 5) % 20 + 1
+            let url = directory.appendingPathComponent(
+                String(format: "core-%02d.png", frame)
+            )
+            if let image = NSImage(contentsOf: url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+            }
         }
-        view.animates = true
     }
 }
 

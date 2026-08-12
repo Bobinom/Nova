@@ -38,6 +38,8 @@ cp "$REPO_DIR/macos/NovaMenuBar/Resources/nova-red-core.png" \
     "$RESOURCES_DIR/nova-red-core.png"
 cp "$REPO_DIR/macos/NovaMenuBar/Resources/nova-orange-core.gif" \
     "$RESOURCES_DIR/nova-orange-core.gif"
+cp -R "$REPO_DIR/macos/NovaMenuBar/Resources/nova-orange-frames" \
+    "$RESOURCES_DIR/nova-orange-frames"
 
 "$REPO_DIR/.venv/bin/python" -m PyInstaller \
     --noconfirm \
