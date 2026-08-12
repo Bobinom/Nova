@@ -7,6 +7,7 @@ from typing import Any
 
 from nova import __version__
 from nova.agent.service import SupervisorAgent
+from nova.agent.repository import AgentRunRepository
 from nova.actions.service import ActionService
 from nova.conversation.manager import ConversationManager
 from nova.conversation.repository import ConversationRepository
@@ -18,6 +19,8 @@ from nova.core.paths import NovaPaths
 from nova.core.settings import SettingsManager
 from nova.core.state import StateStore
 from nova.llm.ollama import OllamaService
+from nova.llm.openai import OpenAIKeychain, OpenAIService
+from nova.llm.router import BrainRouter
 from nova.live.service import LiveInformationService
 from nova.memory.engine import MemoryEngine
 from nova.memory.repository import MemoryRepository
@@ -68,7 +71,8 @@ class NovaApplication:
         self.live = LiveInformationService(self.settings)
         self.voice = VoiceService(self.settings, data_dir=self.paths.data_dir)
         self.tasks = TaskService(self.paths.database_file)
-        self.agent = SupervisorAgent(self.tasks)
+        self.agent_runs = AgentRunRepository(self.paths.database_file)
+        self.agent = SupervisorAgent(self.tasks, runs=self.agent_runs)
 
         self.events = EventBus(
             logger=self.logger,
@@ -86,9 +90,9 @@ class NovaApplication:
             logger=self.logger.getChild("memory"),
         )
 
-        self.llm = OllamaService(
-            model="llama3.2",
-        )
+        self.local_llm = OllamaService(model="llama3.2")
+        self.cloud_llm = OpenAIService(OpenAIKeychain())
+        self.llm = BrainRouter(self.settings, self.local_llm, self.cloud_llm)
 
         self.conversation = ConversationManager(
             repository=ConversationRepository(self.paths.database_file),

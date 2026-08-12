@@ -124,6 +124,91 @@ class SupervisorAgentTests(unittest.TestCase):
             self.assertIn("Ollama", result["response"])
             app.stop()
 
+    def test_plan_can_start_advance_and_complete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            app.agent.planner = RecordingPlanner(self.make_plan())
+            planned = app.handle_message("Agent: prepare me for tomorrow")
+
+            started = app.handle_message("start my plan")
+            first, second = planned["tasks"]
+            self.assertEqual(started["intent"], "agent_started")
+            self.assertEqual(app.tasks.get(first["id"])["status"], "in_progress")
+
+            advanced = app.handle_message("complete current step")
+            self.assertEqual(advanced["intent"], "agent_step_completed")
+            self.assertEqual(app.tasks.get(first["id"])["status"], "completed")
+            self.assertEqual(app.tasks.get(second["id"])["status"], "in_progress")
+
+            completed = app.handle_message("finish the current step")
+            self.assertEqual(completed["intent"], "agent_completed")
+            self.assertEqual(app.agent.status()["run_status"], "idle")
+            app.stop()
+
+    def test_yes_starts_a_plan_after_nova_offers_to_begin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            app.agent.planner = RecordingPlanner(self.make_plan())
+            app.handle_message("Agent: prepare me for tomorrow")
+
+            result = app.handle_message("yes")
+
+            self.assertEqual(result["intent"], "agent_started")
+            self.assertEqual(result["agent_status"], "running")
+            app.stop()
+
+    def test_plan_pause_and_resume_survive_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            app = NovaApplication(base_dir=base)
+            app.start()
+            app.agent.planner = RecordingPlanner(self.make_plan())
+            app.handle_message("Plan prepare for tomorrow")
+            app.handle_message("begin the plan")
+
+            paused = app.handle_message("pause my plan")
+            self.assertEqual(paused["agent_status"], "paused")
+            app.stop()
+
+            restarted = NovaApplication(base_dir=base)
+            restarted.start()
+            status = restarted.handle_message("agent status")
+            self.assertEqual(status["agent_status"], "paused")
+            resumed = restarted.handle_message("resume my plan")
+            self.assertEqual(resumed["agent_status"], "running")
+            self.assertEqual(restarted.agent.status()["current_step"], "Review tomorrow's calendar")
+            restarted.stop()
+
+    def test_cancel_marks_every_remaining_plan_task_cancelled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            app.agent.planner = RecordingPlanner(self.make_plan())
+            planned = app.handle_message("Agent: prepare me for tomorrow")
+            app.handle_message("start my plan")
+
+            result = app.handle_message("cancel the plan")
+
+            self.assertEqual(result["intent"], "agent_cancelled")
+            statuses = [app.tasks.get(task["id"])["status"] for task in planned["tasks"]]
+            self.assertEqual(statuses, ["cancelled", "cancelled"])
+            app.stop()
+
+    def test_execution_control_without_a_plan_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            planner = RecordingPlanner(self.make_plan())
+            app.agent.planner = planner
+
+            result = app.handle_message("start my plan")
+
+            self.assertEqual(result["intent"], "agent_no_plan")
+            self.assertEqual(planner.goals, [])
+            app.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

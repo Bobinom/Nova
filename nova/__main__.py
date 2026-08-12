@@ -178,6 +178,8 @@ def main() -> None:
     print("  task-cancel <id>")
     print("  task-delete <id>")
     print("  agent <goal>")
+    print("  start | pause | resume | cancel my plan")
+    print("  complete current step | agent status")
     print("  forget <memory-key>")
     print("  quit")
 

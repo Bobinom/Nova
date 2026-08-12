@@ -11,7 +11,7 @@ struct NovaMenuBarApp: App {
         WindowGroup("Nova", id: "chat") {
             ContentView().environmentObject(engine)
         }
-        .defaultSize(width: 940, height: 640)
+        .defaultSize(width: 1280, height: 800)
 
         MenuBarExtra("Nova", systemImage: "sparkles") {
             NovaMenu(engine: engine, loginItem: loginItem)

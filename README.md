@@ -154,6 +154,11 @@ grant Nova Calendar access. No Google password or OAuth secret is stored by Nova
 
 ### Nova 7.7 interface
 
+The current command-center theme uses a near-black technical grid, restrained
+white instrumentation, red status lighting, and an animated red/white energy
+core. Tasks and calendar information flank the core while chat, voice, calendar,
+and settings remain accessible from the circular lower command dock.
+
 Nova 7.7 retains the Floating Glass design with an atmospheric indigo
 background, narrow navigation rail, translucent live cards, floating composer,
 and central animated orb. The orb breathes gently while ready, emits expanding
@@ -233,10 +238,31 @@ Pydantic AI with the local `qwen2.5:1.5b` Ollama model to produce a validated,
 bounded plan of up to eight steps, then saves those steps in the existing Tasks
 workspace. For example: `Agent: prepare me for a productive day tomorrow`.
 
+Nova can then guide the plan one step at a time. Say `start my plan`, `complete
+current step`, `pause my plan`, `resume my plan`, `cancel my plan`, or `agent
+status`. The active step and progress persist across restarts and appear in the
+native Tasks card.
+
 The planning agent cannot run shell commands, change files, send messages,
 purchase anything, or bypass Nova's existing computer-action confirmations.
 Ordinary conversation and deterministic task, memory, live-information, and
 action routes continue to run before the agent path.
+
+### Local, Hybrid, and Cloud brains
+
+Nova's Settings screen provides three processing modes:
+
+- **Local** uses Ollama only.
+- **Hybrid** uses OpenAI for conversation and automatically falls back to
+  Ollama when the key, network, or cloud service is unavailable.
+- **Cloud** requires OpenAI and reports cloud failures instead of silently
+  changing providers.
+
+Connect an OpenAI API key in **Settings → Nova brain**. The credential is saved
+in macOS Keychain and is never written to Nova's settings or SQLite database.
+The default cloud model is `gpt-5.4-mini` through the Responses API. Task,
+memory, live-information, and confirmed-action routing remains deterministic
+and local; only conversational requests reach the selected language model.
 
 The glass **Suggested** card can request current local weather from Open-Meteo. Nova uses
 the exact `user.location` fact you previously saved, and sends it only when you
@@ -336,6 +362,10 @@ Continue our PC upgrade discussion.
 | `task-cancel <id>` | Cancel a task |
 | `task-delete <id>` | Permanently delete a task |
 | `agent <goal>` | Create a validated local plan and add its steps to Tasks |
+| `start my plan` / `resume my plan` | Start or resume the next plan step |
+| `complete current step` | Finish the active step and advance safely |
+| `pause my plan` / `cancel my plan` | Pause or cancel the active plan |
+| `agent status` | Show persisted plan progress and the active step |
 | `quit` | Stop Nova safely |
 
 ## Voice and actions

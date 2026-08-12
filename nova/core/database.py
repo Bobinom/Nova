@@ -8,11 +8,11 @@ from typing import Any
 
 
 class DatabaseManager:
-    CURRENT_SCHEMA_VERSION = 4
+    CURRENT_SCHEMA_VERSION = 5
     EXPECTED_TABLES = {
         "app_state", "conversation_episodes", "conversation_sessions",
         "conversation_turns", "memories", "memory_archive", "nova_schema",
-        "assistant_tasks",
+        "agent_runs", "assistant_tasks",
     }
     MIGRATIONS = {
         1: (
@@ -69,6 +69,18 @@ class DatabaseManager:
                 CHECK (status IN ('open', 'in_progress', 'completed', 'cancelled')),
             priority INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 3),
             due_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT
+        )""",),
+        5: ("""CREATE TABLE IF NOT EXISTS agent_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            objective TEXT NOT NULL,
+            project TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'planned'
+                CHECK (status IN ('planned', 'running', 'paused',
+                                  'completed', 'cancelled')),
+            current_task_id INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             completed_at TEXT

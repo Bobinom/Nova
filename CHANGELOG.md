@@ -2,7 +2,46 @@
 
 All notable Nova releases are documented here.
 
-## Unreleased
+## 8.2.0 - 2026-08-12
+
+### Interface redesign
+
+- A new red command-center dashboard with a technical grid, framed task and
+  calendar panels, compact circular navigation, and a prominent animated core.
+- State-aware core lighting for ready, listening, thinking, and speaking.
+- A native looping orange energy-core animation derived from the supplied
+  command-center artwork, preserving every GIF frame inside the macOS app.
+- Transparent core frames and stricter center bounds prevent the animation from
+  covering the header or displaying a mismatched square background.
+- Replaced the previous core and its extra decorative circle with a transparent
+  red particle-ring animation supplied by the user.
+- Restored the particle animation's full widescreen canvas and removed center
+  clipping so its outer particles remain visible throughout the loop.
+- Promoted the animated orb to a full-window visual layer, allowing its particle
+  field to move behind the complete command interface without blocking controls.
+- Preloaded particle frames once per view lifetime instead of repeatedly reading
+  and decoding PNG files during every animation tick.
+- Added distinct core motion for ready, listening, thinking, speaking, and
+  offline states, including listening waves and speech-like rhythmic pulses.
+- The existing chat, voice, tasks, calendar, settings, and action-confirmation
+  controls remain available inside the redesigned interface.
+
+### Added
+
+- Local, Hybrid, and Cloud brain modes in native Settings.
+- OpenAI Responses API support using `gpt-5.4-mini` for cloud conversation.
+- Secure OpenAI API-key storage in macOS Keychain.
+- Automatic Ollama fallback when Hybrid mode cannot reach OpenAI.
+- Provider and model status in the native dashboard bridge.
+
+### Privacy and safety
+
+- Nova's SQLite memories, task state, actions, and confirmations remain local.
+- Only the compact conversation context selected by Nova is sent to OpenAI.
+- Cloud responses cannot bypass deterministic action routes or confirmations.
+- Responses API requests disable server-side response storage.
+
+## 8.1.0 - 2026-08-10
 
 ### Added
 
@@ -11,6 +50,9 @@ All notable Nova releases are documented here.
 - A dedicated `qwen2.5:1.5b` Ollama planning model, selected after local
   benchmarking against the larger conversation model.
 - Agent availability and provider details in the native dashboard bridge.
+- Persistent agent runs with start, status, step completion, pause, resume, and
+  cancellation controls in both chat and voice.
+- Active-plan progress in the native Tasks card, restored after app restarts.
 
 ### Privacy and safety
 
@@ -18,6 +60,8 @@ All notable Nova releases are documented here.
   file, messaging, purchasing, printing, or computer-control tools.
 - Existing deterministic memory, tasks, live information, and confirmed action
   routes retain priority over the agent.
+- Advancing a plan only changes local task state; computer actions still use
+  Nova's existing explicit confirmation flow.
 
 ## 8.0.0 - 2026-08-09
 

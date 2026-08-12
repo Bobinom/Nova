@@ -63,6 +63,33 @@ class TaskService:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_project(
+        self,
+        project: str,
+        *,
+        include_finished: bool = True,
+    ) -> list[dict[str, Any]]:
+        finished = "" if include_finished else (
+            "AND status IN ('open', 'in_progress')"
+        )
+        with sqlite3.connect(self.database_path) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                f"""SELECT * FROM assistant_tasks WHERE project = ? {finished}
+                ORDER BY id ASC""",
+                (project,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def latest_project(self, prefix: str = "Agent:") -> str | None:
+        with sqlite3.connect(self.database_path) as connection:
+            row = connection.execute(
+                """SELECT project FROM assistant_tasks
+                WHERE project LIKE ? ORDER BY id DESC LIMIT 1""",
+                (f"{prefix}%",),
+            ).fetchone()
+        return str(row[0]) if row is not None else None
+
     def set_status(self, task_id: int, status: str) -> dict[str, Any]:
         clean_status = status.strip().lower()
         if clean_status not in self.VALID_STATUSES:
