@@ -24,6 +24,17 @@ struct AssistantTask: Identifiable {
     let project: String
 }
 
+struct SkillComparison: Identifiable {
+    let id = UUID()
+    let title: String
+    let firstOption: String
+    let secondOption: String
+    let criteria: [String]
+    let status: String
+    let note: String
+    let runID: Int
+}
+
 struct DashboardStatus {
     var version = ""
     var memories = 0
@@ -99,6 +110,7 @@ final class NovaEngine: ObservableObject {
     @Published private(set) var actionProgressMessage = ""
     @Published private(set) var dashboard = DashboardStatus()
     @Published private(set) var weather = WeatherStatus()
+    @Published private(set) var skillComparison: SkillComparison?
     @Published private(set) var voiceSetupMessage = ""
     @Published private(set) var voiceOutputMessage = ""
     @Published private(set) var wakeStatusMessage = ""
@@ -211,6 +223,10 @@ final class NovaEngine: ObservableObject {
             command: "task_status",
             values: ["task_id": taskID, "status": "completed"]
         )
+    }
+
+    func dismissSkillComparison() {
+        skillComparison = nil
     }
 
     func setPersonality(_ personality: String) {
@@ -526,6 +542,18 @@ final class NovaEngine: ObservableObject {
         if let intent = result["intent"] as? String,
            intent.hasPrefix("task_") || intent.hasPrefix("agent_") {
             send(command: "dashboard")
+        }
+        if let comparison = result["comparison"] as? [String: Any] {
+            let run = result["skill_run"] as? [String: Any] ?? [:]
+            skillComparison = SkillComparison(
+                title: comparison["title"] as? String ?? "Comparison",
+                firstOption: comparison["first_option"] as? String ?? "Option A",
+                secondOption: comparison["second_option"] as? String ?? "Option B",
+                criteria: comparison["criteria"] as? [String] ?? [],
+                status: comparison["status"] as? String ?? "Prepared",
+                note: comparison["note"] as? String ?? "",
+                runID: run["id"] as? Int ?? 0
+            )
         }
         if result["action_status"] as? String == "pending_confirmation",
            let action = result["action"] as? [String: Any] {

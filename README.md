@@ -244,6 +244,10 @@ Each use creates a persistent SQLite skill run. Record an outcome with
 `complete skill run <id> rating <1-5> feedback <text>` or inspect history with
 `skill-runs`. Feedback is stored for a later approval-based improvement system;
 Skills v1 never silently rewrites a skill or bypasses action confirmation.
+In the native app, comparison requests made through the Research skill open a
+side-by-side workspace showing the detected options, evaluation criteria, and
+skill-run status. It clearly marks specifications as pending until sourced live
+research is connected.
 
 ### Local supervisor agent
 

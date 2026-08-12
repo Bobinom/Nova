@@ -83,6 +83,20 @@ struct ContentView: View {
             )
             .interactiveDismissDisabled(!onboardingCompleted)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { engine.skillComparison != nil },
+                set: { presented in
+                    if !presented { engine.dismissSkillComparison() }
+                }
+            )
+        ) {
+            if let comparison = engine.skillComparison {
+                SkillComparisonSheet(comparison: comparison) {
+                    engine.dismissSkillComparison()
+                }
+            }
+        }
     }
 
     private var atmosphericBackground: some View {
@@ -809,6 +823,84 @@ struct ContentView: View {
         let message = input
         input = ""
         engine.sendMessage(message)
+    }
+}
+
+private struct SkillComparisonSheet: View {
+    let comparison: SkillComparison
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(comparison.title.uppercased())
+                        .font(.title2.monospaced().weight(.semibold))
+                        .foregroundStyle(novaRed)
+                    Text("RESEARCH SKILL • RUN \(comparison.runID)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done", action: dismiss)
+                    .buttonStyle(.borderedProminent)
+                    .tint(novaRed)
+            }
+
+            HStack(spacing: 12) {
+                comparisonCard(comparison.firstOption, label: "OPTION A")
+                comparisonCard(comparison.secondOption, label: "OPTION B")
+            }
+
+            VStack(alignment: .leading, spacing: 9) {
+                Text("EVALUATION GRID")
+                    .font(.caption.monospaced().weight(.semibold))
+                    .foregroundStyle(novaRed)
+                ForEach(comparison.criteria, id: \.self) { criterion in
+                    HStack {
+                        Text(criterion)
+                        Spacer()
+                        Text("Awaiting sourced research")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
+                    Divider().overlay(Color.white.opacity(0.10))
+                }
+            }
+            .padding(16)
+            .background(panelBackground)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(panelBorder))
+
+            Label(comparison.note, systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(comparison.status.uppercased())
+                .font(.caption.monospaced().weight(.semibold))
+                .foregroundStyle(novaRed)
+        }
+        .padding(24)
+        .frame(minWidth: 720, minHeight: 520)
+        .background(Color(red: 0.008, green: 0.012, blue: 0.013))
+        .preferredColorScheme(.dark)
+    }
+
+    private func comparisonCard(_ name: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(label)
+                .font(.caption2.monospaced())
+                .foregroundStyle(novaRed)
+            Text(name)
+                .font(.title3.weight(.semibold))
+                .lineLimit(2)
+            Spacer()
+            Text("Details will appear here when live research is connected.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 145, alignment: .topLeading)
+        .background(Color.black.opacity(0.42))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(panelBorder))
     }
 }
 

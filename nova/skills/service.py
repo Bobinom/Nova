@@ -50,7 +50,7 @@ class SkillService:
             f"{index}. {instruction}"
             for index, instruction in enumerate(skill.instructions, start=1)
         )
-        return {
+        result = {
             "handled": True,
             "intent": "skill_prepared",
             "skill": skill.as_dict(),
@@ -61,6 +61,22 @@ class SkillService:
                 "provides guidance only and cannot execute computer actions."
             ),
         }
+        if skill.skill_id == "research" and self._is_comparison(cleaned):
+            first, second = self._comparison_options(cleaned)
+            result["comparison"] = {
+                "title": "Laptop comparison",
+                "first_option": first,
+                "second_option": second,
+                "criteria": [
+                    "Performance", "Battery", "Display", "Portability", "Price"
+                ],
+                "status": "Research prepared",
+                "note": (
+                    "Skills v1 has prepared the comparison framework. "
+                    "Specifications are not filled until live sourced research is added."
+                ),
+            }
+        return result
 
     def process(self, text: str) -> dict[str, Any]:
         cleaned = re.sub(r"\s+", " ", text.strip())
@@ -137,6 +153,20 @@ class SkillService:
                 self._skills[skill.skill_id] = skill
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 self.errors.append(f"{manifest_path}: {exc}")
+
+    @staticmethod
+    def _is_comparison(request: str) -> bool:
+        lowered = request.lower()
+        return any(marker in lowered for marker in ("compare", " vs ", " versus "))
+
+    @staticmethod
+    def _comparison_options(request: str) -> tuple[str, str]:
+        cleaned = request.strip().rstrip(".?!")
+        cleaned = re.sub(r"^compare\s+", "", cleaned, flags=re.I)
+        split = re.split(r"\s+(?:vs\.?|versus|and)\s+", cleaned, maxsplit=1, flags=re.I)
+        if len(split) == 2 and all(part.strip() for part in split):
+            return split[0].strip().title(), split[1].strip().title()
+        return "Laptop A", "Laptop B"
 
     @staticmethod
     def _result(intent: str, response: str) -> dict[str, Any]:

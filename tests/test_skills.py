@@ -33,6 +33,21 @@ class SkillServiceTests(unittest.TestCase):
             self.assertEqual(len(app.skills.runs.list()), 1)
             app.stop()
 
+    def test_research_comparison_returns_structured_popup_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+
+            result = app.handle_message(
+                "Use skill research for MacBook Air vs Dell XPS 13"
+            )
+
+            comparison = result["comparison"]
+            self.assertEqual(comparison["first_option"], "Macbook Air")
+            self.assertEqual(comparison["second_option"], "Dell Xps 13")
+            self.assertIn("Performance", comparison["criteria"])
+            app.stop()
+
     def test_user_skill_manifest_is_loaded_without_executable_code(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

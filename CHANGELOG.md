@@ -12,6 +12,8 @@ All notable Nova releases are documented here.
   run history with completion status, ratings, and feedback.
 - Skills v1 is guidance-only: executable permissions are rejected, skills cannot
   silently modify themselves, and existing action confirmations remain intact.
+- Research comparison requests now open a native side-by-side comparison sheet
+  with detected options, evaluation criteria, and honest research status.
 
 ## 8.2.0 - 2026-08-12
 
