@@ -21,6 +21,8 @@ All notable Nova releases are documented here.
   field to move behind the complete command interface without blocking controls.
 - Preloaded particle frames once per view lifetime instead of repeatedly reading
   and decoding PNG files during every animation tick.
+- Added distinct core motion for ready, listening, thinking, speaking, and
+  offline states, including listening waves and speech-like rhythmic pulses.
 - The existing chat, voice, tasks, calendar, settings, and action-confirmation
   controls remain available inside the redesigned interface.
 

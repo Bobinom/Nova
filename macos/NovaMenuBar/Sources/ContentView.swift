@@ -1293,18 +1293,83 @@ private struct RedEnergyCore: View {
         GeometryReader { geometry in
             TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
                 let phase = timeline.date.timeIntervalSinceReferenceDate
-                let active = state == .listening || state == .thinking || state == .speaking
-                let pulse = 1 + sin(phase * (active ? 3.5 : 1.35)) * (active ? 0.035 : 0.018)
-                coreImage
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .scaleEffect(pulse)
-                    .rotation3DEffect(
-                        .degrees(sin(phase * 0.34) * 2.2),
-                        axis: (x: 0, y: 1, z: 0),
-                        perspective: 0.35
-                    )
-                    .brightness(active ? 0.08 : 0)
-                    .shadow(color: novaRed.opacity(active ? 0.8 : 0.35), radius: active ? 26 : 12)
+                let visuals = visuals(at: phase)
+                ZStack {
+                    if state == .listening {
+                        listeningWaves(at: phase, size: geometry.size)
+                    }
+                    coreImage
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .scaleEffect(visuals.scale)
+                        .rotationEffect(.degrees(visuals.rotation))
+                        .rotation3DEffect(
+                            .degrees(sin(phase * visuals.tiltSpeed) * visuals.tilt),
+                            axis: (x: 0, y: 1, z: 0),
+                            perspective: 0.35
+                        )
+                        .brightness(visuals.brightness)
+                        .saturation(visuals.saturation)
+                        .shadow(color: novaRed.opacity(visuals.glowOpacity), radius: visuals.glowRadius)
+                }
+            }
+        }
+    }
+
+    private func visuals(at phase: TimeInterval) -> CoreVisuals {
+        switch state {
+        case .ready:
+            return CoreVisuals(
+                scale: 1 + sin(phase * 1.25) * 0.018,
+                rotation: sin(phase * 0.18) * 1.2,
+                tilt: 1.8, tiltSpeed: 0.3,
+                brightness: 0, saturation: 0.96,
+                glowOpacity: 0.32, glowRadius: 12
+            )
+        case .listening:
+            return CoreVisuals(
+                scale: 1.03 + sin(phase * 4.4) * 0.038,
+                rotation: sin(phase * 0.5) * 2,
+                tilt: 3.2, tiltSpeed: 0.7,
+                brightness: 0.13, saturation: 1.18,
+                glowOpacity: 0.9, glowRadius: 34
+            )
+        case .thinking:
+            return CoreVisuals(
+                scale: 1.01 + sin(phase * 5.8) * 0.022,
+                rotation: phase * 7.5,
+                tilt: 5.5, tiltSpeed: 1.25,
+                brightness: 0.08, saturation: 1.08,
+                glowOpacity: 0.72, glowRadius: 24
+            )
+        case .speaking:
+            let voicePulse = (sin(phase * 9.0) + sin(phase * 14.0) * 0.45) / 1.45
+            return CoreVisuals(
+                scale: 1.035 + voicePulse * 0.055,
+                rotation: sin(phase * 0.9) * 3,
+                tilt: 4, tiltSpeed: 0.85,
+                brightness: 0.12 + voicePulse * 0.035,
+                saturation: 1.22,
+                glowOpacity: 0.92, glowRadius: 38 + voicePulse * 7
+            )
+        case .starting, .unavailable:
+            return CoreVisuals(
+                scale: 0.98, rotation: 0,
+                tilt: 0, tiltSpeed: 0,
+                brightness: -0.16, saturation: 0.45,
+                glowOpacity: 0.12, glowRadius: 6
+            )
+        }
+    }
+
+    private func listeningWaves(at phase: TimeInterval, size: CGSize) -> some View {
+        let diameter = min(size.width, size.height) * 0.48
+        return ZStack {
+            ForEach(0..<3, id: \.self) { index in
+                let progress = (phase * 0.55 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
+                Circle()
+                    .stroke(novaRed.opacity(0.42 * (1 - progress)), lineWidth: 2)
+                    .frame(width: diameter, height: diameter)
+                    .scaleEffect(1 + progress * 1.45)
             }
         }
     }
@@ -1321,6 +1386,17 @@ private struct RedEnergyCore: View {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }
     }
+}
+
+private struct CoreVisuals {
+    let scale: CGFloat
+    let rotation: Double
+    let tilt: Double
+    let tiltSpeed: Double
+    let brightness: Double
+    let saturation: Double
+    let glowOpacity: Double
+    let glowRadius: CGFloat
 }
 
 private struct AnimatedFrameView: View {
