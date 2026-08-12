@@ -9,6 +9,8 @@ All notable Nova releases are documented here.
 - A new red command-center dashboard with a technical grid, framed task and
   calendar panels, compact circular navigation, and a prominent animated core.
 - State-aware core lighting for ready, listening, thinking, and speaking.
+- A native looping orange energy-core animation derived from the supplied
+  command-center artwork, preserving every GIF frame inside the macOS app.
 - The existing chat, voice, tasks, calendar, settings, and action-confirmation
   controls remain available inside the redesigned interface.
 

@@ -4,7 +4,7 @@ private let novaPurple = Color(red: 0.98, green: 0.03, blue: 0.06)
 private let novaCyan = Color(red: 1.0, green: 0.30, blue: 0.30)
 private let panelBackground = Color.white.opacity(0.035)
 private let panelBorder = Color.white.opacity(0.18)
-private let novaRed = Color(red: 1.0, green: 0.025, blue: 0.045)
+private let novaRed = Color(red: 1.0, green: 0.29, blue: 0.025)
 
 struct ContentView: View {
     enum InterfaceMode: String, CaseIterable {
@@ -1316,16 +1316,32 @@ private struct RedEnergyCore: View {
 
     @ViewBuilder
     private var coreImage: some View {
-        if let url = Bundle.main.url(forResource: "nova-red-core", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
+        if let url = Bundle.main.url(forResource: "nova-orange-core", withExtension: "gif") {
+            AnimatedGIFView(url: url)
                 .frame(width: 450, height: 410)
         } else {
             Circle().fill(novaRed).frame(width: 220, height: 220)
         }
+    }
+}
+
+private struct AnimatedGIFView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageAlignment = .alignCenter
+        view.animates = true
+        view.image = NSImage(contentsOf: url)
+        return view
+    }
+
+    func updateNSView(_ view: NSImageView, context: Context) {
+        if view.image == nil {
+            view.image = NSImage(contentsOf: url)
+        }
+        view.animates = true
     }
 }
 
