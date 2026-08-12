@@ -1324,24 +1324,44 @@ private struct RedEnergyCore: View {
 }
 
 private struct AnimatedFrameView: View {
-    let directory: URL
+    @StateObject private var frameStore: AnimationFrameStore
     let frameCount: Int
     let framesPerSecond: Double
 
+    init(directory: URL, frameCount: Int, framesPerSecond: Double) {
+        _frameStore = StateObject(
+            wrappedValue: AnimationFrameStore(directory: directory, frameCount: frameCount)
+        )
+        self.frameCount = frameCount
+        self.framesPerSecond = framesPerSecond
+    }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / framesPerSecond)) { context in
-            let frame = Int(
+            let frameIndex = Int(
                 context.date.timeIntervalSinceReferenceDate * framesPerSecond
-            ) % frameCount + 1
-            let url = directory.appendingPathComponent(
-                String(format: "core-%03d.png", frame)
-            )
-            if let image = NSImage(contentsOf: url) {
+            ) % max(frameStore.frames.count, 1)
+            if frameStore.frames.indices.contains(frameIndex) {
+                let image = frameStore.frames[frameIndex]
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
             }
+        }
+    }
+}
+
+@MainActor
+private final class AnimationFrameStore: ObservableObject {
+    let frames: [NSImage]
+
+    init(directory: URL, frameCount: Int) {
+        frames = (1...frameCount).compactMap { frame in
+            let url = directory.appendingPathComponent(
+                String(format: "core-%03d.png", frame)
+            )
+            return NSImage(contentsOf: url)
         }
     }
 }

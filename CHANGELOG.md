@@ -19,6 +19,8 @@ All notable Nova releases are documented here.
   clipping so its outer particles remain visible throughout the loop.
 - Promoted the animated orb to a full-window visual layer, allowing its particle
   field to move behind the complete command interface without blocking controls.
+- Preloaded particle frames once per view lifetime instead of repeatedly reading
+  and decoding PNG files during every animation tick.
 - The existing chat, voice, tasks, calendar, settings, and action-confirmation
   controls remain available inside the redesigned interface.
 
