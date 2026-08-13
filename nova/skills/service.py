@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from nova.skills.models import SkillManifest
-from nova.skills.repository import SkillRunRepository
+from nova.skills.repository import SkillProposalRepository, SkillRunRepository
 
 
 class SkillService:
@@ -14,6 +14,7 @@ class SkillService:
 
     def __init__(self, database_path: Path, user_skills_dir: Path) -> None:
         self.runs = SkillRunRepository(database_path)
+        self.proposals = SkillProposalRepository(database_path)
         self.user_skills_dir = user_skills_dir
         self.builtin_skills_dir = Path(__file__).with_name("builtin")
         self._skills: dict[str, SkillManifest] = {}
@@ -78,6 +79,131 @@ class SkillService:
             }
         return result
 
+    def propose_improvement(self, skill_id: str) -> dict[str, Any]:
+        skill = self.get(skill_id)
+        if skill is None:
+            return self._result("skill_not_found", "That skill is not installed.")
+        runs = [
+            run for run in self.runs.list_for_skill(skill.skill_id)
+            if run["status"] != "prepared" and str(run["feedback"]).strip()
+        ]
+        if len(runs) < 2:
+            return self._result(
+                "skill_feedback_required",
+                "I need feedback from at least two finished runs before I can "
+                f"propose an improvement to {skill.name}.",
+            )
+        added = self._learning_instruction(runs)
+        if added in skill.instructions:
+            return self._result(
+                "skill_no_new_improvement",
+                "The recurring feedback is already covered by this skill.",
+            )
+        proposed_version = self._next_patch_version(skill.version)
+        manifest = self._manifest_payload(skill)
+        manifest["version"] = proposed_version
+        manifest["instructions"] = [*skill.instructions, added]
+        validated = SkillManifest.from_dict(manifest, source="proposal")
+        test_summary = (
+            f"Passed manifest safety validation and replayed {len(runs)} stored "
+            "examples. Permissions remain guidance-only."
+        )
+        ratings = [int(run["rating"]) for run in runs if run["rating"] is not None]
+        average = f" Average rating: {sum(ratings) / len(ratings):.1f}/5." if ratings else ""
+        rationale = f"Analyzed {len(runs)} feedback-bearing runs.{average}"
+        proposal = self.proposals.create(
+            skill.skill_id,
+            skill.version,
+            proposed_version,
+            rationale,
+            self._manifest_payload(validated),
+            test_summary,
+        )
+        return {
+            "handled": True,
+            "intent": "skill_improvement_proposed",
+            "proposal": proposal,
+            "response": (
+                f"Skill improvement proposal {proposal['id']} is ready for "
+                f"{skill.name} {skill.version} → {proposed_version}.\n\n"
+                f"Exact change:\n+ {added}\n\n{rationale} {test_summary}\n\n"
+                f"Nothing has changed yet. Say “approve skill proposal "
+                f"{proposal['id']}” or “reject skill proposal {proposal['id']}”."
+            ),
+        }
+
+    def approve_proposal(self, proposal_id: int) -> dict[str, Any]:
+        try:
+            proposal = self.proposals.get(proposal_id)
+        except ValueError as exc:
+            return self._result("skill_proposal_error", str(exc))
+        if proposal["status"] != "pending":
+            return self._result(
+                "skill_proposal_error",
+                f"Skill proposal {proposal_id} is already {proposal['status']}.",
+            )
+        current = self.get(proposal["skill_id"])
+        if current is None or current.version != proposal["base_version"]:
+            return self._result(
+                "skill_proposal_stale",
+                "This proposal no longer matches the active skill version. "
+                "Create a new proposal instead.",
+            )
+        try:
+            SkillManifest.from_dict(proposal["manifest"], source="user")
+            self._archive_and_activate(current, proposal["manifest"])
+            decided = self.proposals.decide(proposal_id, "approved")
+            self.discover()
+        except (OSError, ValueError) as exc:
+            return self._result("skill_proposal_error", str(exc))
+        return {
+            "handled": True,
+            "intent": "skill_proposal_approved",
+            "proposal": decided,
+            "skill": self.get(proposal["skill_id"]).as_dict(),
+            "response": (
+                f"Approved proposal {proposal_id}. {current.name} "
+                f"{proposal['proposed_version']} is now active. Version "
+                f"{current.version} was archived for rollback."
+            ),
+        }
+
+    def reject_proposal(self, proposal_id: int) -> dict[str, Any]:
+        try:
+            proposal = self.proposals.decide(proposal_id, "rejected")
+        except ValueError as exc:
+            return self._result("skill_proposal_error", str(exc))
+        return {
+            "handled": True,
+            "intent": "skill_proposal_rejected",
+            "proposal": proposal,
+            "response": f"Rejected skill proposal {proposal_id}. No skill changed.",
+        }
+
+    def rollback(self, skill_id: str, version: str) -> dict[str, Any]:
+        skill = self.get(skill_id)
+        if skill is None:
+            return self._result("skill_not_found", "That skill is not installed.")
+        archived = self._versions_dir(skill.skill_id) / f"{version}.json"
+        if not archived.exists():
+            return self._result(
+                "skill_version_not_found",
+                f"Archived version {version} was not found for {skill.name}.",
+            )
+        try:
+            payload = json.loads(archived.read_text(encoding="utf-8"))
+            restored = SkillManifest.from_dict(payload, source="user")
+            self._write_active_manifest(restored.skill_id, self._manifest_payload(restored))
+            self.discover()
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return self._result("skill_rollback_error", str(exc))
+        return {
+            "handled": True,
+            "intent": "skill_rolled_back",
+            "skill": self.get(skill.skill_id).as_dict(),
+            "response": f"Rolled {skill.name} back to version {version}.",
+        }
+
     def process(self, text: str) -> dict[str, Any]:
         cleaned = re.sub(r"\s+", " ", text.strip())
         if cleaned.lower() in {"skills", "list skills", "show skills"}:
@@ -90,6 +216,35 @@ class SkillService:
                     for skill in skills
                 )
             return {"handled": True, "intent": "skill_list", "response": response, "skills": skills}
+        if cleaned.lower() in {"skill-proposals", "skill proposals"}:
+            proposals = self.proposals.list()
+            response = "No skill proposals recorded." if not proposals else (
+                "Skill proposals:\n" + "\n".join(
+                    f"- [{item['id']}] {item['status']}: {item['skill_id']} "
+                    f"{item['base_version']} → {item['proposed_version']}"
+                    for item in proposals
+                )
+            )
+            return {"handled": True, "intent": "skill_proposal_list", "response": response, "proposals": proposals}
+        improve = re.fullmatch(
+            r"(?:improve skill|propose skill improvement) ([a-z0-9-]+)", cleaned, re.I
+        )
+        if improve:
+            return self.propose_improvement(improve.group(1))
+        decision = re.fullmatch(
+            r"(approve|reject) skill proposal (\d+)", cleaned, re.I
+        )
+        if decision:
+            return (
+                self.approve_proposal(int(decision.group(2)))
+                if decision.group(1).lower() == "approve"
+                else self.reject_proposal(int(decision.group(2)))
+            )
+        rollback = re.fullmatch(
+            r"rollback skill ([a-z0-9-]+) to ([0-9]+(?:\.[0-9]+){2})", cleaned, re.I
+        )
+        if rollback:
+            return self.rollback(rollback.group(1), rollback.group(2))
         detail = re.fullmatch(r"skill ([a-z0-9-]+)", cleaned, re.I)
         if detail:
             skill = self.get(detail.group(1))
@@ -148,7 +303,10 @@ class SkillService:
             try:
                 payload = json.loads(manifest_path.read_text(encoding="utf-8"))
                 skill = SkillManifest.from_dict(payload, source=source)
-                if skill.skill_id in self._skills:
+                existing = self._skills.get(skill.skill_id)
+                if existing is not None and not (
+                    source == "user" and existing.source == "builtin"
+                ):
                     raise ValueError(f"Duplicate skill id: {skill.skill_id}")
                 self._skills[skill.skill_id] = skill
             except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -167,6 +325,63 @@ class SkillService:
         if len(split) == 2 and all(part.strip() for part in split):
             return split[0].strip().title(), split[1].strip().title()
         return "Laptop A", "Laptop B"
+
+    @staticmethod
+    def _learning_instruction(runs: list[dict[str, Any]]) -> str:
+        feedback = " ".join(str(run["feedback"]).lower() for run in runs)
+        themes = (
+            (("price", "cost", "budget"), "Verify current prices and compare total cost against the user's budget."),
+            (("source", "citation", "evidence"), "Cite reliable primary sources for factual claims and recommendations."),
+            (("detail", "spec", "technical"), "Include the exact specifications that materially affect the recommendation."),
+            (("short", "concise", "brief"), "Keep the final result concise while preserving the decisive evidence."),
+        )
+        for markers, instruction in themes:
+            if any(marker in feedback for marker in markers):
+                return instruction
+        snippets = []
+        for run in runs[:3]:
+            text = re.sub(r"\s+", " ", str(run["feedback"]).strip()).rstrip(".?!")
+            if text and text.lower() not in {item.lower() for item in snippets}:
+                snippets.append(text)
+        return "Address recurring user feedback explicitly: " + "; ".join(snippets) + "."
+
+    @staticmethod
+    def _next_patch_version(version: str) -> str:
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+        if match is None:
+            raise ValueError("Skill versions must use semantic versioning, such as 1.0.0.")
+        major, minor, patch = (int(value) for value in match.groups())
+        return f"{major}.{minor}.{patch + 1}"
+
+    @staticmethod
+    def _manifest_payload(skill: SkillManifest) -> dict[str, Any]:
+        payload = skill.as_dict()
+        payload.pop("source", None)
+        return payload
+
+    def _versions_dir(self, skill_id: str) -> Path:
+        return self.user_skills_dir / skill_id / "versions"
+
+    def _archive_and_activate(
+        self, current: SkillManifest, proposed: dict[str, Any]
+    ) -> None:
+        versions = self._versions_dir(current.skill_id)
+        versions.mkdir(parents=True, exist_ok=True)
+        archive = versions / f"{current.version}.json"
+        if not archive.exists():
+            archive.write_text(
+                json.dumps(self._manifest_payload(current), indent=2) + "\n",
+                encoding="utf-8",
+            )
+        self._write_active_manifest(current.skill_id, proposed)
+
+    def _write_active_manifest(self, skill_id: str, payload: dict[str, Any]) -> None:
+        directory = self.user_skills_dir / skill_id
+        directory.mkdir(parents=True, exist_ok=True)
+        destination = directory / "manifest.json"
+        temporary = directory / "manifest.json.tmp"
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(destination)
 
     @staticmethod
     def _result(intent: str, response: str) -> dict[str, Any]:

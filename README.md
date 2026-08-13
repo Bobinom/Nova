@@ -233,7 +233,7 @@ Terminal commands include `tasks`, `task-add <title>`, `task-start <id>`,
 
 ### Reusable skills
 
-Nova Skills v1 provides reusable, declarative workflows without allowing skill
+Nova Skills v2 provides reusable, declarative workflows without allowing skill
 files to execute arbitrary code. Say or type `skills`, `skill research`, or
 `use skill research for compare two laptops`. Built-in skills cover research
 and project planning. Personal skills can be installed as
@@ -242,8 +242,13 @@ currently accepts only the `none` permission.
 
 Each use creates a persistent SQLite skill run. Record an outcome with
 `complete skill run <id> rating <1-5> feedback <text>` or inspect history with
-`skill-runs`. Feedback is stored for a later approval-based improvement system;
-Skills v1 never silently rewrites a skill or bypasses action confirmation.
+`skill-runs`. After feedback has been recorded for at least two finished runs,
+`improve skill <skill-id>` analyzes recurring themes, tests a versioned manifest,
+and displays the exact proposed instruction change. The active skill remains
+untouched until `approve skill proposal <id>` is entered; proposals can instead
+be rejected, inspected with `skill-proposals`, or reversed later with
+`rollback skill <skill-id> to <version>`. Skills never silently rewrite
+themselves, gain executable permissions, or bypass action confirmation.
 In the native app, comparison requests made through the Research skill open a
 side-by-side workspace showing the detected options, evaluation criteria, and
 skill-run status. It clearly marks specifications as pending until sourced live

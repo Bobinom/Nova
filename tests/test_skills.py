@@ -129,6 +129,105 @@ class SkillServiceTests(unittest.TestCase):
             self.assertEqual(result["skill_run"]["feedback"], "Needed prices")
             app.stop()
 
+    def test_improvement_requires_feedback_from_two_finished_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            prepared = app.skills.prepare("research", "compare laptops")
+            app.skills.runs.finish(
+                prepared["skill_run"]["id"], "completed",
+                feedback="Needed current prices", rating=3,
+            )
+
+            result = app.handle_message("Improve skill research")
+
+            self.assertEqual(result["intent"], "skill_feedback_required")
+            self.assertEqual(app.skills.proposals.list(), [])
+            app.stop()
+
+    def test_improvement_proposal_shows_exact_change_without_activating(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            for request in ("compare laptops", "compare desktops"):
+                prepared = app.skills.prepare("research", request)
+                app.skills.runs.finish(
+                    prepared["skill_run"]["id"], "completed",
+                    feedback="Needed current prices and budget", rating=3,
+                )
+
+            result = app.handle_message("Improve skill research")
+
+            self.assertEqual(result["intent"], "skill_improvement_proposed")
+            self.assertEqual(result["proposal"]["status"], "pending")
+            self.assertEqual(result["proposal"]["proposed_version"], "1.0.1")
+            self.assertIn("Exact change:", result["response"])
+            self.assertIn("Verify current prices", result["response"])
+            self.assertEqual(app.skills.get("research").version, "1.0.0")
+            app.stop()
+
+    def test_approved_proposal_activates_and_can_be_rolled_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = NovaApplication(base_dir=root)
+            app.start()
+            for request in ("compare laptops", "compare tablets"):
+                prepared = app.skills.prepare("research", request)
+                app.skills.runs.finish(
+                    prepared["skill_run"]["id"], "completed",
+                    feedback="Please cite sources", rating=4,
+                )
+            proposal = app.handle_message("Improve skill research")["proposal"]
+
+            approved = app.handle_message(
+                f"Approve skill proposal {proposal['id']}"
+            )
+
+            self.assertEqual(approved["intent"], "skill_proposal_approved")
+            self.assertEqual(app.skills.get("research").version, "1.0.1")
+            self.assertTrue(
+                any(
+                    instruction.startswith("Cite reliable primary sources")
+                    for instruction in app.skills.get("research").instructions
+                )
+            )
+            archive = app.paths.skills_dir / "research" / "versions" / "1.0.0.json"
+            self.assertTrue(archive.exists())
+
+            restarted = SkillService(app.paths.database_file, app.paths.skills_dir)
+            restarted.discover()
+            self.assertEqual(restarted.get("research").version, "1.0.1")
+
+            rolled_back = app.handle_message("Rollback skill research to 1.0.0")
+            self.assertEqual(rolled_back["intent"], "skill_rolled_back")
+            self.assertEqual(app.skills.get("research").version, "1.0.0")
+            app.stop()
+
+    def test_rejected_proposal_does_not_change_skill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = NovaApplication(base_dir=Path(directory))
+            app.start()
+            for request in ("plan launch", "plan release"):
+                prepared = app.skills.prepare("project-planning", request)
+                app.skills.runs.finish(
+                    prepared["skill_run"]["id"], "completed",
+                    feedback="Make it more concise", rating=4,
+                )
+            proposal = app.handle_message(
+                "Improve skill project-planning"
+            )["proposal"]
+
+            rejected = app.handle_message(
+                f"Reject skill proposal {proposal['id']}"
+            )
+
+            self.assertEqual(rejected["intent"], "skill_proposal_rejected")
+            self.assertEqual(app.skills.get("project-planning").version, "1.0.0")
+            self.assertEqual(
+                app.skills.proposals.get(proposal["id"])["status"], "rejected"
+            )
+            app.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

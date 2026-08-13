@@ -14,6 +14,12 @@ All notable Nova releases are documented here.
   silently modify themselves, and existing action confirmations remain intact.
 - Research comparison requests now open a native side-by-side comparison sheet
   with detected options, evaluation criteria, and honest research status.
+- Added Skills v2 approval-based learning: feedback from finished runs can
+  produce a tested, versioned proposal with its exact instruction change.
+- Skill proposals remain inactive until explicitly approved. Rejection leaves
+  the skill unchanged, and every replaced version is archived for rollback.
+- Learned skills remain declarative and guidance-only; proposal validation
+  continues to reject executable permissions.
 
 ## 8.2.0 - 2026-08-12
 

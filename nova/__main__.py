@@ -185,6 +185,10 @@ def main() -> None:
     print("  use skill <skill-id> for <request>")
     print("  skill-runs")
     print("  complete skill run <id> [rating 1-5] [feedback <text>]")
+    print("  improve skill <skill-id>")
+    print("  skill-proposals")
+    print("  approve | reject skill proposal <id>")
+    print("  rollback skill <skill-id> to <version>")
     print("  forget <memory-key>")
     print("  quit")
 

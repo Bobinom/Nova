@@ -83,7 +83,7 @@ class DatabaseManagerTests(unittest.TestCase):
             health = app.database_health()
 
             self.assertEqual(health["status"], "healthy")
-            self.assertEqual(health["schema_version"], 6)
+            self.assertEqual(health["schema_version"], 7)
             self.assertEqual(app.database_recoveries(), [])
             app.stop()
 
